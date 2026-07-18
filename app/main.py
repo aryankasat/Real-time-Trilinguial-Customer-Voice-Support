@@ -1,46 +1,23 @@
 import os
-import uuid
 import asyncio
 import aiohttp
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-
-from livekit.api import AccessToken, VideoGrants
 
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.parallel_pipeline import ParallelPipeline
 from pipecat.pipeline.task import PipelineWorker, PipelineParams
 from pipecat.pipeline.runner import WorkerRunner
 from pipecat.processors.frame_processor import FrameProcessor, FrameDirection
-from pipecat.frames.frames import Frame, TextFrame, EndFrame
+from pipecat.frames.frames import Frame, TextFrame, EndFrame, TTSAudioRawFrame
 
 from app.utils.language import detect_language
 from app.processors.language_filter import LanguageFilter
 from app.processors.output_capture import OutputCapture
 from app.services.tts_factory import create_tts_service
-
-class SynthesizeRequest(BaseModel):
-    text: str
-
-def generate_livekit_token(room_name: str, identity: str) -> str:
-    """
-    Generates a LiveKit JWT AccessToken with room join grants.
-    """
-    api_key = os.getenv("LIVEKIT_API_KEY", "devkey")
-    api_secret = os.getenv("LIVEKIT_API_SECRET", "secret")
-    
-    token = AccessToken(api_key, api_secret)
-    token.with_identity(identity)
-    
-    grants = VideoGrants(
-        room_join=True,
-        room=room_name
-    )
-    token.with_grants(grants)
-    return token.to_jwt()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -50,77 +27,67 @@ async def lifespan(app: FastAPI):
     # Shutdown: close session
     await app.state.session.close()
 
-app = FastAPI(lifespan=lifespan, title="Trilingual WebRTC TTS Orchestrator API")
+app = FastAPI(lifespan=lifespan, title="Trilingual WebSocket TTS Orchestrator API")
 
-async def run_pipeline(room_name: str, bot_token: str, text: str):
-    """
-    Asynchronous background worker that runs the Pipecat routing pipeline
-    and pushes voice streams to the LiveKit room via WebRTC.
-    """
+@app.websocket("/ws/synthesize")
+async def websocket_synthesize(websocket: WebSocket):
+    await websocket.accept()
+    print("[WebSocket] Client connected")
     try:
-        session = app.state.session
-        livekit_url = os.getenv("LIVEKIT_API_URL", "ws://localhost:7880")
-        
-        # Instantiate local/mock TTS engine services
-        en_tts = create_tts_service("en_us", session)
-        hi_tts = create_tts_service("hi_in", session)
-        ar_tts = create_tts_service("ar_eg", session)
+        while True:
+            # Receive json data from client: {"text": "..."}
+            data = await websocket.receive_json()
+            text = data.get("text", "").strip()
+            if not text:
+                continue
 
-        # Setup LiveKit transport with 16kHz audio out sample rate matching our synthesizers
-        from pipecat.transports.livekit.transport import LiveKitTransport, LiveKitParams
-        params = LiveKitParams(audio_out_sample_rate=16000)
-        transport = LiveKitTransport(
-            url=livekit_url,
-            token=bot_token,
-            room_name=room_name,
-            params=params
-        )
+            print(f"[WebSocket] Received synthesis request for text: '{text}'")
 
-        # Build ParallelPipeline branching
-        parallel = ParallelPipeline(
-            [LanguageFilter("en_us"), en_tts, OutputCapture("en_us")],
-            [LanguageFilter("hi_in"), hi_tts, OutputCapture("hi_in")],
-            [LanguageFilter("ar_eg"), ar_tts, OutputCapture("ar_eg")]
-        )
-        
-        # Pipe parallel outputs straight to WebRTC transport output
-        pipeline = Pipeline([parallel, transport.output()])
+            # Custom frame processor to push audio frames directly to active WebSocket connection
+            class WebSocketAudioSender(FrameProcessor):
+                async def process_frame(self, frame: Frame, direction: FrameDirection):
+                    await super().process_frame(frame, direction)
+                    if isinstance(frame, TTSAudioRawFrame):
+                        # Pushes raw 16-bit PCM bytes to client
+                        await websocket.send_bytes(frame.audio)
+                    await self.push_frame(frame, direction)
 
-        # Initialize Pipecat task and runner
-        task = PipelineWorker(pipeline, params=PipelineParams())
-        runner = WorkerRunner()
-        await runner.add_workers(task)
+            sender = WebSocketAudioSender()
+            session = app.state.session
 
-        # Queue the text frame and EndFrame to terminate bot when done
-        await task.queue_frames([TextFrame(text), EndFrame()])
+            # Create TTS engine instances for this request
+            en_tts = create_tts_service("en_us", session)
+            hi_tts = create_tts_service("hi_in", session)
+            ar_tts = create_tts_service("ar_eg", session)
 
-        print(f"\n[Orchestrator Backend] Bot connecting to LiveKit room '{room_name}' via WebRTC...")
-        await runner.run()
-        print(f"[Orchestrator Backend] Bot successfully completed playback and left room '{room_name}'")
+            # Parallel routing pipeline
+            parallel = ParallelPipeline(
+                [LanguageFilter("en_us"), en_tts, OutputCapture("en_us")],
+                [LanguageFilter("hi_in"), hi_tts, OutputCapture("hi_in")],
+                [LanguageFilter("ar_eg"), ar_tts, OutputCapture("ar_eg")]
+            )
+            
+            pipeline = Pipeline([parallel, sender])
+
+            # Instantiate Pipecat task and runner
+            task = PipelineWorker(pipeline, params=PipelineParams())
+            runner = WorkerRunner()
+            await runner.add_workers(task)
+
+            # Queue frames to start and end worker
+            await task.queue_frames([TextFrame(text), EndFrame()])
+
+            # Run pipeline synchronously for this text block
+            await runner.run()
+
+            # Notify the client that synthesis for this text is finished
+            await websocket.send_json({"type": "done"})
+            print(f"[WebSocket] Synthesis complete for text: '{text}'")
+
+    except WebSocketDisconnect:
+        print("[WebSocket] Client disconnected")
     except Exception as e:
-        print(f"[Error] Background pipeline execution failed in room '{room_name}': {e}")
-
-@app.post("/api/synthesize")
-async def api_synthesize(req: SynthesizeRequest):
-    if not req.text.strip():
-        raise HTTPException(status_code=400, detail="Text payload cannot be empty")
-
-    # Generate a unique room name and tokens
-    room_name = f"room_{uuid.uuid4().hex[:12]}"
-    bot_token = generate_livekit_token(room_name, f"bot_{uuid.uuid4().hex[:4]}")
-    user_token = generate_livekit_token(room_name, f"user_{uuid.uuid4().hex[:4]}")
-    
-    livekit_url = os.getenv("LIVEKIT_API_URL", "ws://localhost:7880")
-    
-    # Spawn Pipecat transport connection in the background
-    asyncio.create_task(run_pipeline(room_name, bot_token, req.text))
-    
-    # Return LiveKit connection properties instantly to client
-    return {
-        "room": room_name,
-        "token": user_token,
-        "url": livekit_url
-    }
+        print(f"[WebSocket Error] Exception occurred: {e}")
 
 # Serve UI static index.html at root
 @app.get("/")

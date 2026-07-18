@@ -5,38 +5,36 @@ This repository provides an interactive web application for a real-time trilingu
 - **Hindi (India)** (`hi_in`)
 - **Arabic (Egypt)** (`ar_eg`)
 
-The application is refactored according to **SOLID design principles**, separating concerns into modular utilities, custom processors, service factories, and web interfaces. It uses the **Pipecat** conversational framework and **LiveKit** to stream synthesized speech back to the browser in real time via **WebRTC**.
+The application is refactored according to **SOLID design principles**, separating concerns into modular utilities, custom processors, service factories, and web interfaces. It uses the **Pipecat** conversational framework and **FastAPI WebSockets** to stream synthesized speech back to the browser in real time.
 
 ---
 
-## 1. WebRTC & LiveKit Orchestration Architecture
+## 1. Native WebSocket Orchestration Architecture
 
-Unlike standard file-retrieval TTS APIs, this system utilizes a real-time WebRTC media connection to stream synthesized voice tracks dynamically with sub-second latency.
+Unlike standard file-retrieval TTS APIs, this system utilizes a native WebSocket connection to stream synthesized voice tracks dynamically with low latency, removing any external dependencies.
 
 ```
   1. [User enters text in Browser]
              │
-             ▼ (HTTP POST to /api/synthesize)
-  2. [FastAPI App]
-             ├─► Generate a unique room name (e.g. room_<uuid>)
-             ├─► Generate LiveKit Bot Token (bot identity)
-             ├─► Generate LiveKit Client Token (user identity)
-             ├─► Returns user token and connection URL to Browser instantly
+             ▼ (WebSocket sends text JSON: {"text": "..."})
+  2. [FastAPI WebSocket Endpoint /ws/synthesize]
+             ├─► Receives text message
+             ├─► Dynamically compiles the Pipecat routing pipeline
+             ├─► Pipes output to WebSocketAudioSender custom FrameProcessor
              │
-             ▼ (FastAPI launches Pipecat pipeline in background task)
-  3. [Pipecat Pipeline Worker (Bot)]
-             ├─► Connects to the LiveKit Room via WebRTC (LiveKitTransport)
-             ├─► Routes the text frame based on language script detection
-             ├─► Synthesizes speech to raw audio frames
-             ├─► Feeds output to LiveKitTransport.output()
-             └─► Disconnects and terminates when synthesis is complete (EndFrame)
+             ▼ (Pipecat pipeline runs asynchronously)
+  3. [Pipecat Parallel Routing & Synthesis]
+             ├─► LanguageFilter routes text to correct TTS service
+             ├─► TTS service synthesizes speech to raw audio frames
+             ├─► WebSocketAudioSender pushes raw 16-bit PCM bytes via websocket
+             └─► Sends completion signal {"type": "done"} when pipeline stops
              
   4. [Browser Frontend UI]
-             ├─► Receives room token from the HTTP response
-             ├─► Connects to the same LiveKit Room via the LiveKit JS client SDK
-             ├─► Listens for TrackSubscribed events (audio track)
-             ├─► Attaches the audio track for real-time playback
-             └─► Connects the Web Audio API AnalyserNode to visually animate the waveform
+             ├─► Establishes persistent WebSocket connection to /ws/synthesize
+             ├─► Receives binary message (arrayBuffer of 16-bit PCM)
+             ├─► Decodes PCM data to Float32 [-1.0, 1.0]
+             ├─► Schedules back-to-back smooth playback using Web Audio API buffer scheduling
+             └─► Routes the audio nodes to AnalyserNode to animate the canvas visualizer
 ```
 
 ---
@@ -48,7 +46,7 @@ The backend is organized into decoupled modules inside the `app/` package:
 ```
 ├── app/
 │   ├── config.py               # Loads configuration from .env
-│   ├── main.py                 # FastAPI server (lifespans, API routes, static mounts)
+│   ├── main.py                 # FastAPI server (lifespans, WebSocket endpoints, static mounts)
 │   ├── processors/
 │   │   ├── language_filter.py  # LanguageFilter custom FrameProcessor
 │   │   └── output_capture.py   # OutputCapture custom FrameProcessor
@@ -72,7 +70,6 @@ The backend is organized into decoupled modules inside the `app/` package:
 
 ### Prerequisites
 - **Python 3.10+**
-- **Docker** (to run the local LiveKit server)
 
 ### Step 1: Install Dependencies
 1. Create and activate a virtual environment:
@@ -86,27 +83,16 @@ The backend is organized into decoupled modules inside the `app/` package:
    ```
 
 ### Step 2: Configure Environment
-Edit `.env` to configure your self-hosted TTS model endpoints and LiveKit server credentials:
+Edit `.env` to configure your self-hosted TTS model endpoints:
 
 ```env
 # Supported providers: mock, piper_http, local_api
 TTS_PROVIDER_EN_US=mock
 TTS_VOICE_EN_US=en_US-ryan-high
 TTS_URL_EN_US=http://localhost:5000
-
-# LiveKit WebRTC Configuration (Default Local Dev Server)
-LIVEKIT_API_URL=ws://localhost:7880
-LIVEKIT_API_KEY=devkey
-LIVEKIT_API_SECRET=secret
 ```
 
-### Step 3: Run the LiveKit WebRTC Server
-Start a local LiveKit instance in development mode using Docker:
-```bash
-docker run --rm -p 7880:7880 -p 7881:7881 -p 7882:7882/udp livekit/livekit-server --dev
-```
-
-### Step 4: Run the Backend Web Server
+### Step 3: Run the Backend Web Server
 Start the FastAPI server:
 ```bash
 python trilingual_orchestrator.py

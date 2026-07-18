@@ -5,6 +5,3 @@ pipecat-ai
 python-dotenv
 fastapi
 uvicorn
-livekit>=1.1.0
-livekit-api>=1.2.0
-tenacity>=9.0.0
