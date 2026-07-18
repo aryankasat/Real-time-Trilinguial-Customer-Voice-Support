@@ -1,116 +1,124 @@
-# Real-time Trilingual Customer Voice Support
+# SOLID Trilingual Customer Voice Support Web App
 
-This repository provides an orchestration and data-acquisition solution for building a real-time trilingual customer voice support system supporting three language subsets:
+This repository provides an interactive web application for a real-time trilingual customer voice support system supporting three language subsets:
 - **English (United States)** (`en_us`)
 - **Hindi (India)** (`hi_in`)
 - **Arabic (Egypt)** (`ar_eg`)
 
-It utilizes the **Pipecat** orchestration framework to dynamically route inputs to distinct processing pipelines based on language.
+The application is refactored according to **SOLID design principles**, separating concerns into modular utilities, custom processors, service factories, and web interfaces. It uses the **Pipecat** conversational framework and **LiveKit** to stream synthesized speech back to the browser in real time via **WebRTC**.
 
 ---
 
-## 1. Pipecat Orchestration Pipeline
+## 1. WebRTC & LiveKit Orchestration Architecture
 
-We use the [Pipecat framework](https://github.com/pipecat-ai/pipecat) to define a parallel processing pipeline that dynamically detects input language and routes text frames to their respective language TTS pipelines.
-
-### Pipeline Architecture
-
-```mermaid
-graph TD
-    Input[Test Feeder / Text Input] --> Pipeline[Pipecat PipelineWorker]
-    Pipeline --> Parallel[ParallelPipeline]
-    
-    subgraph Parallel Branches
-        Parallel --> FilterEN[LanguageFilter en_us]
-        FilterEN --> TTS_EN[English TTS Service]
-        TTS_EN --> CaptureEN[OutputCapture en_us]
-        
-        Parallel --> FilterHI[LanguageFilter hi_in]
-        FilterHI --> TTS_HI[Hindi TTS Service]
-        TTS_HI --> CaptureHI[OutputCapture hi_in]
-        
-        Parallel --> FilterAR[LanguageFilter ar_eg]
-        FilterAR --> TTS_AR[Arabic TTS Service]
-        TTS_AR --> CaptureAR[OutputCapture ar_eg]
-    end
-```
-
-### Components
-
-1. **Language Detection**: Custom Unicode block analyzer that identifies character ranges:
-   - Devanagari script range (`U+0900` to `U+097F`) maps to **Hindi** (`hi_in`).
-   - Arabic script range (`U+0600` to `U+06FF`) maps to **Arabic** (`ar_eg`).
-   - Latin range maps to **English** (`en_us`).
-2. **`LanguageFilter`**: A custom Pipecat `FrameProcessor` placed at the start of each language branch. It evaluates incoming `TextFrame`s and discards them if they don't match the target language, while letting control frames (like `StartFrame`/`EndFrame`) pass through to keep pipeline state synced.
-3. **TTS Services Factory**: Reads `.env` configuration and instantiates the chosen provider for each language, falling back to a lightweight custom `MockTTSService` (which simulates voice synthesis and generates mock frames) when API credentials or models are not configured.
-4. **`OutputCapture`**: A custom `FrameProcessor` placed at the end of each pipeline branch to intercept and verify the generated `TTSAudioRawFrame`s and speak events.
-
-### Running the Orchestrator
-
-Run the pipeline:
-```bash
-python3 trilingual_orchestrator.py
-```
-*(Or via the virtual environment binary directly: `.venv/bin/python trilingual_orchestrator.py`)*
-
-### Configuring Self-Hosted Models via `.env`
-
-To connect the orchestrator to your self-hosted model instances, edit the variables in `.env`:
-
-```env
-# TTS Configuration for en_us (English - US)
-# Supported providers: mock, piper_http, local_api
-TTS_PROVIDER_EN_US=piper_http
-TTS_VOICE_EN_US=en_US-ryan-high
-TTS_URL_EN_US=http://localhost:5000
-```
-
-1. **`piper_http`**: Connects to a locally running Piper HTTP server (e.g. started via `python -m piper.http_server -m en_US-ryan-high`).
-2. **`local_api`**: Connects to a custom generic HTTP API endpoint of a self-hosted model wrapper (receives a JSON payload `{"text": "...", "language": "..."}` and returns raw audio bytes).
-
----
-
-## 2. Google FLEURS Dataset Downloader
-
-To download sample voice data for validation, we have provided an optimized downloader script that downloads the first 5 audio samples and their transcriptions from the [Google FLEURS dataset](https://huggingface.co/datasets/google/fleurs) for all three subsets. 
-
-Unlike standard loading methods which download multi-gigabyte archives, this script streams the archives directly over HTTP and terminates the connection immediately after extracting the first 5 samples. This keeps the network footprint extremely small (~10-12 MB total) and uses zero disk cache.
-
-### Dataset Directory Structure
-
-Running the downloader script creates a `fleurs_dataset` directory with the following structure:
+Unlike standard file-retrieval TTS APIs, this system utilizes a real-time WebRTC media connection to stream synthesized voice tracks dynamically with sub-second latency.
 
 ```
-fleurs_dataset/
-├── en_us/
-│   ├── sample_1.wav
-│   ├── sample_1.txt
-│   ├── ...
-│   ├── sample_5.wav
-│   ├── sample_5.txt
-│   └── transcriptions.csv
-├── hi_in/
-│   └── ...
-└── ar_eg/
-    └── ...
-```
-
-### Running the Downloader
-
-```bash
-python3 download_fleurs.py
+  1. [User enters text in Browser]
+             │
+             ▼ (HTTP POST to /api/synthesize)
+  2. [FastAPI App]
+             ├─► Generate a unique room name (e.g. room_<uuid>)
+             ├─► Generate LiveKit Bot Token (bot identity)
+             ├─► Generate LiveKit Client Token (user identity)
+             ├─► Returns user token and connection URL to Browser instantly
+             │
+             ▼ (FastAPI launches Pipecat pipeline in background task)
+  3. [Pipecat Pipeline Worker (Bot)]
+             ├─► Connects to the LiveKit Room via WebRTC (LiveKitTransport)
+             ├─► Routes the text frame based on language script detection
+             ├─► Synthesizes speech to raw audio frames
+             ├─► Feeds output to LiveKitTransport.output()
+             └─► Disconnects and terminates when synthesis is complete (EndFrame)
+             
+  4. [Browser Frontend UI]
+             ├─► Receives room token from the HTTP response
+             ├─► Connects to the same LiveKit Room via the LiveKit JS client SDK
+             ├─► Listens for TrackSubscribed events (audio track)
+             ├─► Attaches the audio track for real-time playback
+             └─► Connects the Web Audio API AnalyserNode to visually animate the waveform
 ```
 
 ---
 
-## Setup and Installation
+## 2. Codebase Structure (SOLID Principles)
 
-1. **Create and Activate Virtual Environment**:
+The backend is organized into decoupled modules inside the `app/` package:
+
+```
+├── app/
+│   ├── config.py               # Loads configuration from .env
+│   ├── main.py                 # FastAPI server (lifespans, API routes, static mounts)
+│   ├── processors/
+│   │   ├── language_filter.py  # LanguageFilter custom FrameProcessor
+│   │   └── output_capture.py   # OutputCapture custom FrameProcessor
+│   ├── services/
+│   │   ├── local_tts.py        # Custom self-hosted MockTTSService & LocalHttpTTSService
+│   │   └── tts_factory.py      # Factory to build the proper TTS service instance
+│   └── utils/
+│       ├── audio.py            # Audio utility functions (PCM to WAV conversion)
+│       └── language.py         # Script-based language/character set detector
+├── static/
+│   └── index.html              # Premium dark-mode glassmorphism frontend
+├── trilingual_orchestrator.py   # Minimal root uvicorn entry point launcher
+├── download_fleurs.py          # Hugging Face Fleurs metadata & audio downloader
+├── requirements.txt
+└── .env
+```
+
+---
+
+## 3. Getting Started
+
+### Prerequisites
+- **Python 3.10+**
+- **Docker** (to run the local LiveKit server)
+
+### Step 1: Install Dependencies
+1. Create and activate a virtual environment:
    ```bash
    python3 -m venv .venv
    source .venv/bin/activate
    ```
-2. **Install Dependencies**:
+2. Install dependencies:
    ```bash
    pip install -r requirements.txt
    ```
+
+### Step 2: Configure Environment
+Edit `.env` to configure your self-hosted TTS model endpoints and LiveKit server credentials:
+
+```env
+# Supported providers: mock, piper_http, local_api
+TTS_PROVIDER_EN_US=mock
+TTS_VOICE_EN_US=en_US-ryan-high
+TTS_URL_EN_US=http://localhost:5000
+
+# LiveKit WebRTC Configuration (Default Local Dev Server)
+LIVEKIT_API_URL=ws://localhost:7880
+LIVEKIT_API_KEY=devkey
+LIVEKIT_API_SECRET=secret
+```
+
+### Step 3: Run the LiveKit WebRTC Server
+Start a local LiveKit instance in development mode using Docker:
+```bash
+docker run --rm -p 7880:7880 -p 7881:7881 -p 7882:7882/udp livekit/livekit-server --dev
+```
+
+### Step 4: Run the Backend Web Server
+Start the FastAPI server:
+```bash
+python trilingual_orchestrator.py
+```
+Open **`http://localhost:8000`** in your browser to interact with the application.
+
+---
+
+## 4. Google FLEURS Downloader
+
+To acquire trilingual audio samples for dataset verification, run the optimized downloader:
+```bash
+python download_fleurs.py
+```
+This script streams archives in memory and extracts only the first 5 WAV audio samples and their ground-truth transcriptions per subset, terminating the connection instantly to save disk space and network bandwidth (~10-12 MB total data transfer).
