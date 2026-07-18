@@ -3,3 +3,5 @@ certifi
 tqdm
 pipecat-ai
 python-dotenv
+fastapi
+uvicorn

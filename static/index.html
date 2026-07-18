@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trilingual Support Voice Orchestrator</title>
+    <!-- Outfit Font from Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0b0b14;
+            --card-bg: rgba(22, 22, 38, 0.45);
+            --card-border: rgba(255, 255, 255, 0.08);
+            --primary: #8a2be2;
+            --primary-glow: rgba(138, 43, 226, 0.4);
+            --secondary: #00f5ff;
+            --text-color: #f1f1f7;
+            --text-muted: #8c8da3;
+            --accent-en: #4facfe;
+            --accent-hi: #ff9933;
+            --accent-ar: #00e676;
+            --radius: 16px;
+            --font-family: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: var(--font-family);
+            overflow-x: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        /* Decorative ambient glow circles */
+        .ambient-glow-1 {
+            position: absolute;
+            top: 15%;
+            left: 10%;
+            width: 450px;
+            height: 450px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(138, 43, 226, 0.22) 0%, rgba(0,0,0,0) 70%);
+            filter: blur(80px);
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        .ambient-glow-2 {
+            position: absolute;
+            bottom: 10%;
+            right: 10%;
+            width: 500px;
+            height: 500px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(0, 245, 255, 0.15) 0%, rgba(0,0,0,0) 70%);
+            filter: blur(80px);
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        /* Glassmorphism card container */
+        .container {
+            width: 100%;
+            max-width: 780px;
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 24px;
+            backdrop-filter: blur(25px);
+            -webkit-backdrop-filter: blur(25px);
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
+            padding: 40px;
+            position: relative;
+            z-index: 1;
+        }
+
+        header {
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 2.2rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #fff 30%, #a18cd1 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 8px;
+            letter-spacing: -0.5px;
+        }
+
+        p.subtitle {
+            font-size: 0.95rem;
+            color: var(--text-muted);
+            font-weight: 300;
+        }
+
+        .detector-badge-wrapper {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 25px;
+        }
+
+        /* Dynamic badge styling */
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            border-radius: 100px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.4s ease;
+        }
+
+        .badge.en {
+            color: var(--accent-en);
+            background: rgba(79, 172, 254, 0.1);
+            border-color: rgba(79, 172, 254, 0.2);
+            box-shadow: 0 0 15px rgba(79, 172, 254, 0.15);
+        }
+
+        .badge.hi {
+            color: var(--accent-hi);
+            background: rgba(255, 153, 51, 0.1);
+            border-color: rgba(255, 153, 51, 0.2);
+            box-shadow: 0 0 15px rgba(255, 153, 51, 0.15);
+        }
+
+        .badge.ar {
+            color: var(--accent-ar);
+            background: rgba(0, 230, 118, 0.1);
+            border-color: rgba(0, 230, 118, 0.2);
+            box-shadow: 0 0 15px rgba(0, 230, 118, 0.15);
+        }
+
+        .badge .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: var(--text-muted);
+            transition: background-color 0.4s ease;
+        }
+
+        .badge.en .dot { background-color: var(--accent-en); }
+        .badge.hi .dot { background-color: var(--accent-hi); }
+        .badge.ar .dot { background-color: var(--accent-ar); }
+
+        .input-group {
+            position: relative;
+            margin-bottom: 25px;
+        }
+
+        textarea {
+            width: 100%;
+            height: 140px;
+            background: rgba(0, 0, 0, 0.25);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: var(--radius);
+            padding: 16px;
+            color: var(--text-color);
+            font-family: var(--font-family);
+            font-size: 1.05rem;
+            line-height: 1.5;
+            resize: none;
+            outline: none;
+            transition: all 0.3s ease;
+        }
+
+        textarea:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 15px var(--primary-glow);
+            background: rgba(0, 0, 0, 0.35);
+        }
+
+        .btn-container {
+            display: flex;
+            justify-content: flex-end;
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        button {
+            padding: 14px 28px;
+            border-radius: var(--radius);
+            font-family: var(--font-family);
+            font-weight: 600;
+            font-size: 0.95rem;
+            cursor: pointer;
+            outline: none;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            border: none;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary) 0%, #630dd0 100%);
+            color: #fff;
+            box-shadow: 0 4px 20px rgba(138, 43, 226, 0.3);
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 24px rgba(138, 43, 226, 0.5);
+        }
+
+        .btn-primary:active:not(:disabled) {
+            transform: translateY(0);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-color);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        /* Waveform visualizer container */
+        .visualizer-card {
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: var(--radius);
+            padding: 25px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            transition: all 0.3s ease;
+            opacity: 0;
+            transform: translateY(10px);
+            pointer-events: none;
+        }
+
+        .visualizer-card.active {
+            opacity: 1;
+            transform: translateY(0);
+            pointer-events: all;
+        }
+
+        .visualizer-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .visualizer-title {
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted);
+            font-weight: 600;
+        }
+
+        .audio-details {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            display: flex;
+            gap: 15px;
+        }
+
+        .waveform-container {
+            width: 100%;
+            height: 90px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            overflow: hidden;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        canvas {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        .control-row {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+        }
+
+        .btn-circle {
+            width: 54px;
+            height: 54px;
+            border-radius: 50%;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+        }
+
+        .btn-circle.play {
+            background: var(--secondary);
+            color: #0b0b14;
+            box-shadow: 0 4px 15px rgba(0, 245, 255, 0.3);
+        }
+
+        .btn-circle.play:hover {
+            transform: scale(1.05);
+            box-shadow: 0 6px 20px rgba(0, 245, 255, 0.5);
+        }
+
+        /* Loading spinner */
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 0.8s linear infinite;
+            display: none;
+        }
+
+        .loading .spinner {
+            display: block;
+        }
+
+        .loading .btn-text {
+            display: none;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Error banner */
+        .error-banner {
+            background: rgba(244, 67, 54, 0.1);
+            border: 1px solid rgba(244, 67, 54, 0.2);
+            color: #ff8a80;
+            padding: 12px 20px;
+            border-radius: var(--radius);
+            margin-bottom: 25px;
+            font-size: 0.9rem;
+            display: none;
+            align-items: center;
+            gap: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="ambient-glow-1"></div>
+    <div class="ambient-glow-2"></div>
+
+    <div class="container">
+        <header>
+            <h1>Trilingual Support Orchestrator</h1>
+            <p class="subtitle">Self-hosted customer voice synthesis for English, Hindi, and Arabic</p>
+        </header>
+
+        <div class="detector-badge-wrapper">
+            <div id="lang-badge" class="badge">
+                <div class="dot"></div>
+                <span id="lang-text">Detecting Language</span>
+            </div>
+        </div>
+
+        <div id="error-box" class="error-banner">
+            <strong>Error:</strong> <span id="error-message"></span>
+        </div>
+
+        <div class="input-group">
+            <textarea id="text-input" placeholder="Type customer support request here in English, Hindi (नमस्ते) or Arabic (مرحباً)..."></textarea>
+        </div>
+
+        <div class="btn-container">
+            <button id="clear-btn" class="btn-secondary">Clear</button>
+            <button id="synthesize-btn" class="btn-primary">
+                <span class="spinner"></span>
+                <span class="btn-text">Generate Speech</span>
+            </button>
+        </div>
+
+        <!-- Waveform player card -->
+        <div id="visualizer-card" class="visualizer-card">
+            <div class="visualizer-header">
+                <span class="visualizer-title">Synthesized Audio Output</span>
+                <div class="audio-details">
+                    <span id="detail-lang">Language: en_us</span>
+                    <span id="detail-duration">Duration: 0.0s</span>
+                </div>
+            </div>
+
+            <div class="waveform-container">
+                <canvas id="visualizer-canvas"></canvas>
+            </div>
+
+            <div class="control-row">
+                <button id="play-btn" class="btn-circle play">
+                    <!-- Play icon svg -->
+                    <svg id="play-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                    </svg>
+                    <!-- Pause icon svg (hidden initially) -->
+                    <svg id="pause-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display: none;">
+                        <rect x="6" y="4" width="4" height="16"></rect>
+                        <rect x="14" y="4" width="4" height="16"></rect>
+                    </svg>
+                </button>
+                <button id="download-btn" class="btn-secondary">Download WAV</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const textInput = document.getElementById('text-input');
+        const langBadge = document.getElementById('lang-badge');
+        const langText = document.getElementById('lang-text');
+        const synthesizeBtn = document.getElementById('synthesize-btn');
+        const clearBtn = document.getElementById('clear-btn');
+        const errorBox = document.getElementById('error-box');
+        const errorMessage = document.getElementById('error-message');
+        
+        const visualizerCard = document.getElementById('visualizer-card');
+        const detailLang = document.getElementById('detail-lang');
+        const detailDuration = document.getElementById('detail-duration');
+        const playBtn = document.getElementById('play-btn');
+        const playIcon = document.getElementById('play-icon');
+        const pauseIcon = document.getElementById('pause-icon');
+        const downloadBtn = document.getElementById('download-btn');
+        const canvas = document.getElementById('visualizer-canvas');
+        const canvasCtx = canvas.getContext('2d');
+
+        // Language script detector
+        function detectLanguageCode(text) {
+            let counts = { en: 0, hi: 0, ar: 0 };
+            for (let i = 0; i < text.length; i++) {
+                let cp = text.charCodeAt(i);
+                if (cp >= 0x0900 && cp <= 0x097F) {
+                    counts.hi++;
+                } else if (cp >= 0x0600 && cp <= 0x06FF) {
+                    counts.ar++;
+                } else if ((cp >= 65 && cp <= 90) || (cp >= 97 && cp <= 122)) {
+                    counts.en++;
+                }
+            }
+            
+            let maxLang = 'en';
+            let maxCount = counts.en;
+            if (counts.hi > maxCount) { maxLang = 'hi'; maxCount = counts.hi; }
+            if (counts.ar > maxCount) { maxLang = 'ar'; maxCount = counts.ar; }
+            
+            if (maxCount === 0) return 'detecting';
+            return maxLang;
+        }
+
+        // Live script detector update
+        textInput.addEventListener('input', () => {
+            const val = textInput.value;
+            const lang = detectLanguageCode(val);
+            
+            langBadge.className = 'badge';
+            
+            if (lang === 'detecting') {
+                langText.textContent = 'Detecting Language';
+            } else if (lang === 'en') {
+                langBadge.classList.add('en');
+                langText.textContent = 'English (US) Script';
+            } else if (lang === 'hi') {
+                langBadge.classList.add('hi');
+                langText.textContent = 'Hindi (IN) Script';
+            } else if (lang === 'ar') {
+                langBadge.classList.add('ar');
+                langText.textContent = 'Arabic (EG) Script';
+            }
+        });
+
+        // Clear textarea
+        clearBtn.addEventListener('click', () => {
+            textInput.value = '';
+            textInput.dispatchEvent(new Event('input'));
+            errorBox.style.display = 'none';
+        });
+
+        // Web Audio API state
+        let audioContext = null;
+        let audioBuffer = null;
+        let audioSource = null;
+        let analyser = null;
+        let isPlaying = false;
+        let audioUrl = null;
+        let startTime = 0;
+        let startOffset = 0;
+        let animationId = null;
+
+        // Resize visualizer canvas
+        function resizeCanvas() {
+            canvas.width = canvas.clientWidth * window.devicePixelRatio;
+            canvas.height = canvas.clientHeight * window.devicePixelRatio;
+            canvasCtx.scale(window.devicePixelRatio, window.devicePixelRatio);
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // Draw flat baseline on visualizer
+        function drawFlatLine() {
+            const width = canvas.width / window.devicePixelRatio;
+            const height = canvas.height / window.devicePixelRatio;
+            canvasCtx.clearRect(0, 0, width, height);
+            canvasCtx.lineWidth = 3;
+            canvasCtx.strokeStyle = '#4e4e6a';
+            canvasCtx.beginPath();
+            canvasCtx.moveTo(0, height / 2);
+            canvasCtx.lineTo(width, height / 2);
+            canvasCtx.stroke();
+        }
+        drawFlatLine();
+
+        // Draw audio visualization frame
+        function drawVisualizer() {
+            if (!analyser || !isPlaying) {
+                drawFlatLine();
+                return;
+            }
+
+            const width = canvas.width / window.devicePixelRatio;
+            const height = canvas.height / window.devicePixelRatio;
+            const bufferLength = analyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+
+            const draw = () => {
+                if (!isPlaying) return;
+                animationId = requestAnimationFrame(draw);
+
+                analyser.getByteTimeDomainData(dataArray);
+
+                canvasCtx.fillStyle = 'rgba(11, 11, 20, 0.35)';
+                canvasCtx.fillRect(0, 0, width, height);
+
+                canvasCtx.lineWidth = 3;
+                
+                // Set color scheme based on active language
+                const lang = detectLanguageCode(textInput.value);
+                let strokeColor = '#8a2be2';
+                if (lang === 'en') strokeColor = '#4facfe';
+                else if (lang === 'hi') strokeColor = '#ff9933';
+                else if (lang === 'ar') strokeColor = '#00e676';
+                
+                canvasCtx.strokeStyle = strokeColor;
+                canvasCtx.beginPath();
+
+                const sliceWidth = width / bufferLength;
+                let x = 0;
+
+                for (let i = 0; i < bufferLength; i++) {
+                    const v = dataArray[i] / 128.0;
+                    const y = (v * height) / 2;
+
+                    if (i === 0) {
+                        canvasCtx.moveTo(x, y);
+                    } else {
+                        canvasCtx.lineTo(x, y);
+                    }
+
+                    x += sliceWidth;
+                }
+
+                canvasCtx.lineTo(width, height / 2);
+                canvasCtx.stroke();
+            };
+
+            draw();
+        }
+
+        // Synthesize request
+        synthesizeBtn.addEventListener('click', async () => {
+            const text = textInput.value.trim();
+            if (!text) {
+                showError("Please enter some text before generating speech.");
+                return;
+            }
+
+            errorBox.style.display = 'none';
+            synthesizeBtn.classList.add('loading');
+            synthesizeBtn.disabled = true;
+
+            // Stop current playback if active
+            stopAudio();
+
+            try {
+                const response = await fetch('/api/synthesize', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text })
+                });
+
+                if (!response.ok) {
+                    const errDetail = await response.json();
+                    throw new Error(errDetail.detail || "Speech generation failed.");
+                }
+
+                const blob = await response.blob();
+                audioUrl = URL.createObjectURL(blob);
+                
+                // Initialize Web Audio Context
+                if (!audioContext) {
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                }
+
+                const arrayBuffer = await blob.arrayBuffer();
+                audioContext.decodeAudioData(arrayBuffer, (decodedBuffer) => {
+                    audioBuffer = decodedBuffer;
+                    
+                    // Display visualizer controls
+                    const lang = detectLanguageCode(text);
+                    detailLang.textContent = `Language: ${lang === 'en' ? 'en_us' : lang === 'hi' ? 'hi_in' : 'ar_eg'}`;
+                    detailDuration.textContent = `Duration: ${audioBuffer.duration.toFixed(1)}s`;
+                    
+                    visualizerCard.classList.add('active');
+                    synthesizeBtn.classList.remove('loading');
+                    synthesizeBtn.disabled = false;
+
+                    // Instantly trigger play
+                    playAudio();
+                }, (decodeErr) => {
+                    throw new Error("Failed to decode audio payload.");
+                });
+            } catch (err) {
+                console.error(err);
+                showError(err.message);
+                synthesizeBtn.classList.remove('loading');
+                synthesizeBtn.disabled = false;
+            }
+        });
+
+        // Error helper
+        function showError(msg) {
+            errorMessage.textContent = msg;
+            errorBox.style.display = 'flex';
+        }
+
+        // Playback control
+        playBtn.addEventListener('click', () => {
+            if (isPlaying) {
+                pauseAudio();
+            } else {
+                playAudio();
+            }
+        });
+
+        function playAudio() {
+            if (!audioContext || !audioBuffer) return;
+
+            // Resume context if suspended (browser security autoplays)
+            if (audioContext.state === 'suspended') {
+                audioContext.resume();
+            }
+
+            audioSource = audioContext.createBufferSource();
+            audioSource.buffer = audioBuffer;
+
+            // Set up audio frequency analyzer
+            analyser = audioContext.createAnalyser();
+            analyser.fftSize = 256;
+
+            audioSource.connect(analyser);
+            analyser.connect(audioContext.destination);
+
+            audioSource.onended = () => {
+                if (isPlaying) {
+                    // Reached the end naturally
+                    isPlaying = false;
+                    playIcon.style.display = 'block';
+                    pauseIcon.style.display = 'none';
+                    drawFlatLine();
+                    cancelAnimationFrame(animationId);
+                }
+            };
+
+            audioSource.start(0);
+            isPlaying = true;
+            playIcon.style.display = 'none';
+            pauseIcon.style.display = 'block';
+
+            drawVisualizer();
+        }
+
+        function pauseAudio() {
+            stopAudio();
+        }
+
+        function stopAudio() {
+            if (audioSource) {
+                try {
+                    audioSource.stop();
+                } catch(e) {}
+                audioSource = null;
+            }
+            isPlaying = false;
+            playIcon.style.display = 'block';
+            pauseIcon.style.display = 'none';
+            drawFlatLine();
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+            }
+        }
+
+        // Download WAV button
+        downloadBtn.addEventListener('click', () => {
+            if (!audioUrl) return;
+            const a = document.createElement('a');
+            a.href = audioUrl;
+            a.download = `synthesized_speech_${Date.now()}.wav`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        });
+    </script>
+</body>
+</html>
