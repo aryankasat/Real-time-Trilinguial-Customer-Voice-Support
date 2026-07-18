@@ -2,6 +2,7 @@ import os
 import sys
 import asyncio
 import certifi
+import aiohttp
 
 # Bypass macOS SSL certificate verification issues globally for requests/urllib/nltk
 os.environ["SSL_CERT_FILE"] = certifi.where()
@@ -81,6 +82,62 @@ class MockTTSService(FrameProcessor):
             await self.push_frame(frame, direction)
 
 # ------------------------------------------------------------------------------
+# 2.5 Local HTTP TTS Service (Self-Hosted Model Endpoint)
+# ------------------------------------------------------------------------------
+class LocalHttpTTSService(FrameProcessor):
+    """
+    Custom FrameProcessor to communicate with any self-hosted TTS engine exposing an HTTP API.
+    Sends raw text and returns audio bytes, which are then passed downstream.
+    """
+    def __init__(self, language: str, api_url: str, session: aiohttp.ClientSession):
+        super().__init__()
+        self.language = language
+        self.api_url = api_url
+        self.session = session
+
+    async def process_frame(self, frame: Frame, direction: FrameDirection):
+        await super().process_frame(frame, direction)
+        
+        if isinstance(frame, TextFrame):
+            print(f"[{self.language.upper()} Local HTTP TTS] Requesting speech from self-hosted endpoint: {self.api_url} for: '{frame.text}'")
+            # Send TTSStartedFrame to downstream transport/sink
+            await self.push_frame(TTSStartedFrame(), direction)
+            
+            try:
+                headers = {"Content-Type": "application/json"}
+                data = {"text": frame.text, "language": self.language}
+                
+                async with self.session.post(self.api_url, json=data, headers=headers, timeout=10) as response:
+                    if response.status == 200:
+                        audio_bytes = await response.read()
+                        print(f"[{self.language.upper()} Local HTTP TTS] Synthesized {len(audio_bytes)} bytes.")
+                        await self.push_frame(
+                            TTSAudioRawFrame(audio=audio_bytes, sample_rate=16000, num_channels=1),
+                            direction
+                        )
+                    else:
+                        print(f"[Error] Self-hosted TTS API returned status: {response.status}")
+                        # Fallback mock
+                        mock_audio = b"\x00" * 32000
+                        await self.push_frame(
+                            TTSAudioRawFrame(audio=mock_audio, sample_rate=16000, num_channels=1),
+                            direction
+                        )
+            except Exception as e:
+                print(f"[Error] Failed to connect to self-hosted TTS API at {self.api_url}: {e}")
+                # Fallback mock
+                mock_audio = b"\x00" * 32000
+                await self.push_frame(
+                    TTSAudioRawFrame(audio=mock_audio, sample_rate=16000, num_channels=1),
+                    direction
+                )
+                
+            # Send TTSStoppedFrame
+            await self.push_frame(TTSStoppedFrame(), direction)
+        else:
+            await self.push_frame(frame, direction)
+
+# ------------------------------------------------------------------------------
 # 3. Custom Language Filter Frame Processor
 # ------------------------------------------------------------------------------
 class LanguageFilter(FrameProcessor):
@@ -123,56 +180,34 @@ class OutputCapture(FrameProcessor):
 # ------------------------------------------------------------------------------
 # 5. Factory Function for TTS Services
 # ------------------------------------------------------------------------------
-def create_tts_service(language_code: str) -> TTSService:
+def create_tts_service(language_code: str, session: aiohttp.ClientSession) -> TTSService:
     """
     Dynamically loads TTS configurations from .env.
-    Instantiates actual Pipecat services if configured, otherwise falls back to MockTTSService.
+    Instantiates self-hosted local services (piper_http, local_api) or falls back to MockTTSService.
     """
     provider_key = f"TTS_PROVIDER_{language_code.upper()}"
     model_key = f"TTS_MODEL_{language_code.upper()}"
     voice_key = f"TTS_VOICE_{language_code.upper()}"
+    url_key = f"TTS_URL_{language_code.upper()}"
     
     provider = os.getenv(provider_key, "mock").lower()
     model = os.getenv(model_key, "")
     voice = os.getenv(voice_key, "")
+    url = os.getenv(url_key, "")
     
-    print(f"[Init] Creating TTS Service for {language_code} (Provider: {provider}, Model: '{model}', Voice: '{voice}')")
+    print(f"[Init] Creating TTS Service for {language_code} (Provider: {provider}, Model: '{model}', Voice: '{voice}', URL: '{url}')")
     
-    if provider == "elevenlabs":
-        from pipecat.services.elevenlabs.tts import ElevenLabsTTSService
-        api_key = os.getenv("ELEVENLABS_API_KEY", "")
-        if not api_key:
-            print(f"[Warning] ELEVENLABS_API_KEY not found in .env. Falling back to Mock TTS.")
-            return MockTTSService(language_code)
-        settings = ElevenLabsTTSService.Settings(
-            model=model or "eleven_multilingual_v2",
-            voice=voice or "21m00Tcm4TlvDq8ikWAM"
+    if provider == "piper_http":
+        from pipecat.services.piper.tts import PiperHttpTTSService
+        server_url = url or "http://localhost:5000"
+        settings = PiperHttpTTSService.Settings(
+            voice=voice or "en_US-ryan-high"
         )
-        return ElevenLabsTTSService(api_key=api_key, settings=settings)
+        return PiperHttpTTSService(base_url=server_url, aiohttp_session=session, settings=settings)
         
-    elif provider == "cartesia":
-        from pipecat.services.cartesia.tts import CartesiaTTSService
-        api_key = os.getenv("CARTESIA_API_KEY", "")
-        if not api_key:
-            print(f"[Warning] CARTESIA_API_KEY not found in .env. Falling back to Mock TTS.")
-            return MockTTSService(language_code)
-        settings = CartesiaTTSService.Settings(
-            model=model or "sonic-english",
-            voice=voice or "c16198f2-850d-400a-b286-6c7038e219aa"
-        )
-        return CartesiaTTSService(api_key=api_key, settings=settings)
-        
-    elif provider == "openai":
-        from pipecat.services.openai.tts import OpenAITTSService
-        api_key = os.getenv("OPENAI_API_KEY", "")
-        if not api_key:
-            print(f"[Warning] OPENAI_API_KEY not found in .env. Falling back to Mock TTS.")
-            return MockTTSService(language_code)
-        settings = OpenAITTSService.Settings(
-            model=model or "tts-1",
-            voice=voice or "alloy"
-        )
-        return OpenAITTSService(api_key=api_key, settings=settings)
+    elif provider == "local_api":
+        server_url = url or "http://localhost:8000/tts"
+        return LocalHttpTTSService(language_code, server_url, session)
         
     else:
         return MockTTSService(language_code)
@@ -208,36 +243,37 @@ async def feed_inputs(task: PipelineWorker):
     await task.queue_frame(EndFrame())
 
 async def main():
-    # 1. Initialize language-specific TTS services
-    en_tts = create_tts_service("en_us")
-    hi_tts = create_tts_service("hi_in")
-    ar_tts = create_tts_service("ar_eg")
-    
-    # 2. Setup orchestrator routing pipeline using ParallelPipeline
-    parallel = ParallelPipeline(
-        [LanguageFilter("en_us"), en_tts, OutputCapture("en_us")],
-        [LanguageFilter("hi_in"), hi_tts, OutputCapture("hi_in")],
-        [LanguageFilter("ar_eg"), ar_tts, OutputCapture("ar_eg")]
-    )
-    main_pipeline = Pipeline([parallel])
-    
-    # 4. Initialize Pipecat task and runner
-    runner = WorkerRunner()
-    task = PipelineWorker(main_pipeline, params=PipelineParams())
-    
-    # Register the worker task with the runner
-    await runner.add_workers(task)
-    
-    # 5. Create background task to feed test frames
-    feeder_task = asyncio.create_task(feed_inputs(task))
-    
-    # 6. Execute pipeline
-    print("\n[Orchestrator] Starting Pipecat Pipeline runner...")
-    await runner.run()
-    
-    # Wait for feeder background task to wrap up
-    await feeder_task
-    print("[Orchestrator] Pipeline execution completed successfully.")
+    async with aiohttp.ClientSession() as session:
+        # 1. Initialize language-specific TTS services
+        en_tts = create_tts_service("en_us", session)
+        hi_tts = create_tts_service("hi_in", session)
+        ar_tts = create_tts_service("ar_eg", session)
+        
+        # 2. Setup orchestrator routing pipeline using ParallelPipeline
+        parallel = ParallelPipeline(
+            [LanguageFilter("en_us"), en_tts, OutputCapture("en_us")],
+            [LanguageFilter("hi_in"), hi_tts, OutputCapture("hi_in")],
+            [LanguageFilter("ar_eg"), ar_tts, OutputCapture("ar_eg")]
+        )
+        main_pipeline = Pipeline([parallel])
+        
+        # 4. Initialize Pipecat task and runner
+        runner = WorkerRunner()
+        task = PipelineWorker(main_pipeline, params=PipelineParams())
+        
+        # Register the worker task with the runner
+        await runner.add_workers(task)
+        
+        # 5. Create background task to feed test frames
+        feeder_task = asyncio.create_task(feed_inputs(task))
+        
+        # 6. Execute pipeline
+        print("\n[Orchestrator] Starting Pipecat Pipeline runner...")
+        await runner.run()
+        
+        # Wait for feeder background task to wrap up
+        await feeder_task
+        print("[Orchestrator] Pipeline execution completed successfully.")
 
 if __name__ == "__main__":
     asyncio.run(main())

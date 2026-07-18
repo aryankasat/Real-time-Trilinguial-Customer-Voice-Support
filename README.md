@@ -53,20 +53,20 @@ python3 trilingual_orchestrator.py
 ```
 *(Or via the virtual environment binary directly: `.venv/bin/python trilingual_orchestrator.py`)*
 
-### Adding Actual Models via `.env`
+### Configuring Self-Hosted Models via `.env`
 
-To replace the mock synthesizers with real models, uncomment the respective API keys and configure the provider variables in `.env`:
+To connect the orchestrator to your self-hosted model instances, edit the variables in `.env`:
 
 ```env
 # TTS Configuration for en_us (English - US)
-# Supported providers: mock, elevenlabs, cartesia, openai
-TTS_PROVIDER_EN_US=elevenlabs
-TTS_MODEL_EN_US=eleven_turbo_v2_5
-TTS_VOICE_EN_US=21m00Tcm4TlvDq8ikWAM
-
-# Provider API Keys
-ELEVENLABS_API_KEY=your_elevenlabs_api_key_here
+# Supported providers: mock, piper_http, local_api
+TTS_PROVIDER_EN_US=piper_http
+TTS_VOICE_EN_US=en_US-ryan-high
+TTS_URL_EN_US=http://localhost:5000
 ```
+
+1. **`piper_http`**: Connects to a locally running Piper HTTP server (e.g. started via `python -m piper.http_server -m en_US-ryan-high`).
+2. **`local_api`**: Connects to a custom generic HTTP API endpoint of a self-hosted model wrapper (receives a JSON payload `{"text": "...", "language": "..."}` and returns raw audio bytes).
 
 ---
 
