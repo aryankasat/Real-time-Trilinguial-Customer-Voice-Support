@@ -368,6 +368,8 @@
             gap: 10px;
         }
     </style>
+    <!-- LiveKit Client SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
 </head>
 <body>
     <div class="ambient-glow-1"></div>
@@ -593,118 +595,6 @@
             draw();
         }
 
-        let socket = null;
-        let nextPlayTime = 0;
-        const scheduledSources = [];
-
-        function initWebSocket() {
-            if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {
-                return;
-            }
-
-            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const wsUrl = `${protocol}//${window.location.host}/ws/synthesize`;
-            console.log("Connecting to WebSocket:", wsUrl);
-            socket = new WebSocket(wsUrl);
-            socket.binaryType = 'arraybuffer';
-
-            socket.onmessage = async (event) => {
-                if (typeof event.data === 'string') {
-                    const msg = JSON.parse(event.data);
-                    if (msg.type === 'done') {
-                        console.log("Speech synthesis finished.");
-                        synthesizeBtn.classList.remove('loading');
-                        synthesizeBtn.disabled = false;
-                    }
-                } else {
-                    // Binary arraybuffer containing 16-bit PCM samples
-                    await playPCMChunk(event.data);
-                }
-            };
-
-            socket.onclose = () => {
-                console.log("WebSocket connection closed. Reconnecting...");
-                synthesizeBtn.classList.remove('loading');
-                synthesizeBtn.disabled = false;
-                setTimeout(initWebSocket, 2000);
-            };
-
-            socket.onerror = (err) => {
-                console.error("WebSocket error:", err);
-            };
-        }
-
-        // Connect right away
-        initWebSocket();
-
-        async function playPCMChunk(arrayBuffer) {
-            if (!audioContext) {
-                audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            }
-            if (audioContext.state === 'suspended') {
-                await audioContext.resume();
-            }
-
-            const int16Data = new Int16Array(arrayBuffer);
-            if (int16Data.length === 0) return;
-
-            const numSamples = int16Data.length;
-            const sampleRate = 16000;
-
-            // Create AudioBuffer (mono channel, sampleRate = 16000)
-            const audioBuffer = audioContext.createBuffer(1, numSamples, sampleRate);
-            const float32Data = audioBuffer.getChannelData(0);
-
-            // Convert 16-bit signed PCM to Float32 [-1.0, 1.0]
-            for (let i = 0; i < numSamples; i++) {
-                float32Data[i] = int16Data[i] / 32768.0;
-            }
-
-            const source = audioContext.createBufferSource();
-            source.buffer = audioBuffer;
-
-            if (!analyser) {
-                analyser = audioContext.createAnalyser();
-                analyser.fftSize = 256;
-            }
-            source.connect(analyser);
-            analyser.connect(audioContext.destination);
-
-            // Schedule back-to-back playback smoothly
-            const currentTime = audioContext.currentTime;
-            if (nextPlayTime < currentTime) {
-                nextPlayTime = currentTime;
-            }
-
-            source.start(nextPlayTime);
-            scheduledSources.push(source);
-
-            source.onended = () => {
-                const idx = scheduledSources.indexOf(source);
-                if (idx > -1) {
-                    scheduledSources.splice(idx, 1);
-                }
-                if (scheduledSources.length === 0) {
-                    isPlaying = false;
-                    playIcon.style.display = 'block';
-                    pauseIcon.style.display = 'none';
-                    drawFlatLine();
-                    if (animationId) {
-                        cancelAnimationFrame(animationId);
-                    }
-                }
-            };
-
-            nextPlayTime += audioBuffer.duration;
-
-            if (!isPlaying) {
-                isPlaying = true;
-                playIcon.style.display = 'none';
-                pauseIcon.style.display = 'block';
-                drawVisualizer();
-            }
-        }
-
         // Synthesize request
         synthesizeBtn.addEventListener('click', async () => {
             const text = textInput.value.trim();
@@ -720,32 +610,99 @@
             // Stop current playback if active
             stopAudio();
 
-            if (!socket || socket.readyState !== WebSocket.OPEN) {
-                showError("WebSocket is disconnected. Reconnecting...");
-                initWebSocket();
+            try {
+                const response = await fetch('/api/synthesize', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text })
+                });
+
+                if (!response.ok) {
+                    const errDetail = await response.json();
+                    throw new Error(errDetail.detail || "Speech generation failed.");
+                }
+
+                const data = await response.json(); // { room: "...", token: "...", url: "..." }
+                
+                // Pre-flight reachability check for LiveKit port to avoid hanging/infinite loading
+                const testHttpUrl = data.url.replace(/^ws/, 'http');
+                try {
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 1500);
+                    await fetch(testHttpUrl, { mode: 'no-cors', signal: controller.signal });
+                    clearTimeout(timeoutId);
+                } catch (connErr) {
+                    throw new Error("LiveKit Server is offline. Please run 'livekit-server --dev' in another terminal.");
+                }
+
+                // Hide download button since we are WebRTC streaming
+                downloadBtn.style.display = 'none';
+
+                // Initialize Web Audio Context
+                if (!audioContext) {
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                }
+
+                console.log("Connecting to LiveKit room:", data.room);
+                const room = new LivekitClient.Room();
+                currentRoom = room;
+
+                room.on(LivekitClient.RoomEvent.TrackSubscribed, (track, publication, participant) => {
+                    if (track.kind === LivekitClient.TrackKind.Audio) {
+                        console.log("Subscribed to remote audio track:", track.sid);
+                        
+                        // Attach track to document to play audio
+                        const audioElement = track.attach();
+                        audioElement.id = "livekit-audio";
+                        document.body.appendChild(audioElement);
+                        
+                        // Wire into Web Audio API for waveform rendering
+                        analyser = audioContext.createAnalyser();
+                        analyser.fftSize = 256;
+                        
+                        const mediaStream = new MediaStream([track.mediaStreamTrack]);
+                        const source = audioContext.createMediaStreamSource(mediaStream);
+                        source.connect(analyser);
+
+                        // Display visualizer controls
+                        const lang = detectLanguageCode(text);
+                        detailLang.textContent = `Language: ${lang === 'en' ? 'en_us' : lang === 'hi' ? 'hi_in' : 'ar_eg'}`;
+                        detailDuration.textContent = `Room: ${data.room}`;
+                        
+                        visualizerCard.classList.add('active');
+                        isPlaying = true;
+                        playIcon.style.display = 'none';
+                        pauseIcon.style.display = 'block';
+
+                        drawVisualizer();
+                    }
+                });
+
+                room.on(LivekitClient.RoomEvent.TrackUnsubscribed, (track, publication, participant) => {
+                    if (track.kind === LivekitClient.TrackKind.Audio) {
+                        console.log("Audio track unsubscribed");
+                        track.detach();
+                        stopAudio();
+                    }
+                });
+
+                room.on(LivekitClient.RoomEvent.Disconnected, () => {
+                    console.log("Disconnected from LiveKit room");
+                    stopAudio();
+                });
+
+                await room.connect(data.url, data.token);
+                console.log("Connected to room successfully.");
+
                 synthesizeBtn.classList.remove('loading');
                 synthesizeBtn.disabled = false;
-                return;
+
+            } catch (err) {
+                console.error(err);
+                showError(err.message || "Failed to establish WebRTC connection.");
+                synthesizeBtn.classList.remove('loading');
+                synthesizeBtn.disabled = false;
             }
-
-            // Sync start time to now
-            if (audioContext) {
-                nextPlayTime = audioContext.currentTime;
-            } else {
-                nextPlayTime = 0;
-            }
-
-            // Hide download button since we are streaming via WebSockets
-            downloadBtn.style.display = 'none';
-
-            // Send synthesis request
-            socket.send(JSON.stringify({ text }));
-
-            // Display visualizer controls
-            const lang = detectLanguageCode(text);
-            detailLang.textContent = `Language: ${lang === 'en' ? 'en_us' : lang === 'hi' ? 'hi_in' : 'ar_eg'}`;
-            detailDuration.textContent = "Duration: Streaming (WS)";
-            visualizerCard.classList.add('active');
         });
 
         // Error helper
@@ -764,8 +721,9 @@
         });
 
         function playAudio() {
-            if (audioContext && audioContext.state === 'suspended') {
-                audioContext.resume();
+            const audioEl = document.getElementById("livekit-audio");
+            if (audioEl) {
+                audioEl.muted = false;
                 isPlaying = true;
                 playIcon.style.display = 'none';
                 pauseIcon.style.display = 'block';
@@ -774,8 +732,9 @@
         }
 
         function pauseAudio() {
-            if (audioContext && audioContext.state === 'running') {
-                audioContext.suspend();
+            const audioEl = document.getElementById("livekit-audio");
+            if (audioEl) {
+                audioEl.muted = true;
                 isPlaying = false;
                 playIcon.style.display = 'block';
                 pauseIcon.style.display = 'none';
@@ -784,13 +743,16 @@
         }
 
         function stopAudio() {
-            while (scheduledSources.length > 0) {
-                const src = scheduledSources.pop();
+            if (currentRoom) {
                 try {
-                    src.stop();
+                    currentRoom.disconnect();
                 } catch(e) {}
+                currentRoom = null;
             }
-            nextPlayTime = 0;
+            const el = document.getElementById("livekit-audio");
+            if (el) {
+                el.remove();
+            }
             isPlaying = false;
             playIcon.style.display = 'block';
             pauseIcon.style.display = 'none';
