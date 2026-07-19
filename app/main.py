@@ -22,6 +22,28 @@ from app.processors.language_filter import LanguageFilter
 from app.processors.output_capture import OutputCapture
 from app.services.tts_factory import create_tts_service
 
+class DelayProcessor(FrameProcessor):
+    def __init__(self, delay_seconds: float):
+        super().__init__()
+        self.delay_seconds = delay_seconds
+        self.webrtc_established = False
+        self._lock = asyncio.Lock()
+
+    async def process_frame(self, frame: Frame, direction: FrameDirection):
+        await super().process_frame(frame, direction)
+        
+        # We only want to delay user-facing and termination frames (TextFrame/EndFrame)
+        # to allow transport connection/subscription to settle first.
+        if isinstance(frame, (TextFrame, EndFrame)) and not self.webrtc_established:
+            async with self._lock:
+                if not self.webrtc_established:
+                    print(f"[Orchestrator DelayProcessor] Holding frame '{type(frame).__name__}' for {self.delay_seconds} seconds to establish WebRTC path...")
+                    await asyncio.sleep(self.delay_seconds)
+                    self.webrtc_established = True
+                    print("[Orchestrator DelayProcessor] WebRTC negotiation window complete. Releasing frames.")
+                    
+        await self.push_frame(frame, direction)
+
 class SynthesizeRequest(BaseModel):
     text: str
 
@@ -83,15 +105,15 @@ async def run_pipeline(room_name: str, bot_token: str, text: str):
             [LanguageFilter("ar_eg"), ar_tts, OutputCapture("ar_eg")]
         )
         
-        # Pipe parallel outputs straight to WebRTC transport output
-        pipeline = Pipeline([parallel, transport.output()])
+        # Pipe parallel outputs straight to WebRTC transport output, using DelayProcessor to hold synthesis for 2.5s
+        pipeline = Pipeline([DelayProcessor(2.5), parallel, transport.output()])
 
         # Initialize Pipecat task and runner
         task = PipelineWorker(pipeline, params=PipelineParams())
         runner = WorkerRunner()
         await runner.add_workers(task)
 
-        # Queue the text frame and EndFrame to terminate bot when done
+        # Queue the text frame and EndFrame upfront to prevent premature worker shutdown
         await task.queue_frames([TextFrame(text), EndFrame()])
 
         print(f"\n[Orchestrator Backend] Bot connecting to LiveKit room '{room_name}' via WebRTC...")

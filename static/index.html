@@ -945,6 +945,7 @@
         let audioBuffer = null;
         let audioSource = null;
         let analyser = null;
+        let gainNode = null;
         let isPlaying = false;
         let audioUrl = null;
         let startTime = 0;
@@ -1107,9 +1108,12 @@
                 // Hide download button since we are WebRTC streaming
                 downloadBtn.style.display = 'none';
 
-                // Initialize Web Audio Context
+                // Initialize and resume Web Audio Context in the user gesture stack
                 if (!audioContext) {
                     audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                if (audioContext.state === 'suspended') {
+                    await audioContext.resume();
                 }
 
                 console.log("Connecting to LiveKit room:", data.room);
@@ -1129,15 +1133,29 @@
                         // Attach track to document to play audio
                         const audioElement = track.attach();
                         audioElement.id = "livekit-audio";
+                        audioElement.muted = false;
                         document.body.appendChild(audioElement);
                         
-                        // Wire into Web Audio API for waveform rendering
+                        // Force play to prevent browser autoplay block
+                        audioElement.play().catch(e => console.log("Audio play blocked/interrupted:", e));
+                        
+                        // Resume audio context if it was suspended
+                        if (audioContext && audioContext.state === 'suspended') {
+                            audioContext.resume();
+                        }
+                        
+                        // Wire into Web Audio API for waveform rendering and audio output
                         analyser = audioContext.createAnalyser();
                         analyser.fftSize = 256;
+                        
+                        gainNode = audioContext.createGain();
+                        gainNode.gain.value = 1.0;
                         
                         const mediaStream = new MediaStream([track.mediaStreamTrack]);
                         const source = audioContext.createMediaStreamSource(mediaStream);
                         source.connect(analyser);
+                        analyser.connect(gainNode);
+                        gainNode.connect(audioContext.destination);
 
                         // Display visualizer controls
                         const lang = detectLanguageCode(text);
@@ -1164,13 +1182,13 @@
                     if (track.kind === "audio") {
                         console.log("Audio track unsubscribed");
                         track.detach();
-                        stopAudio();
+                        stopAudio('completed');
                     }
                 });
 
                 room.on(LivekitClient.RoomEvent.Disconnected, () => {
                     console.log("Disconnected from LiveKit room");
-                    stopAudio();
+                    stopAudio('completed');
                 });
 
                 const connectPromise = room.connect(data.url, data.token);
@@ -1240,25 +1258,31 @@
             const audioEl = document.getElementById("livekit-audio");
             if (audioEl) {
                 audioEl.muted = false;
-                isPlaying = true;
-                playIcon.style.display = 'none';
-                pauseIcon.style.display = 'block';
-                drawVisualizer();
             }
+            if (gainNode) {
+                gainNode.gain.value = 1.0;
+            }
+            isPlaying = true;
+            playIcon.style.display = 'none';
+            pauseIcon.style.display = 'block';
+            drawVisualizer();
         }
 
         function pauseAudio() {
             const audioEl = document.getElementById("livekit-audio");
             if (audioEl) {
                 audioEl.muted = true;
-                isPlaying = false;
-                playIcon.style.display = 'block';
-                pauseIcon.style.display = 'none';
-                drawFlatLine();
             }
+            if (gainNode) {
+                gainNode.gain.value = 0.0;
+            }
+            isPlaying = false;
+            playIcon.style.display = 'block';
+            pauseIcon.style.display = 'none';
+            drawFlatLine();
         }
 
-        function stopAudio() {
+        function stopAudio(reason = 'user_stop') {
             if (currentRoom) {
                 try {
                     currentRoom.disconnect();
@@ -1276,40 +1300,52 @@
             if (animationId) {
                 cancelAnimationFrame(animationId);
             }
-            // Hide visualizer card
-            if (visualizerCard) {
+            // Hide visualizer card only if manual stop/clear
+            if (reason !== 'completed' && visualizerCard) {
                 visualizerCard.classList.remove('active');
             }
+            // Reset Web Audio nodes
+            gainNode = null;
+            analyser = null;
 
-            // Reset pipeline state
+            // Reset pipeline state based on reason
+            const statusEl = document.getElementById('pipeline-status');
             const val = textInput.value;
             const lang = detectLanguageCode(val);
-            const statusEl = document.getElementById('pipeline-status');
-            if (statusEl) statusEl.textContent = 'System Idle';
-            
-            updatePipeline('en-branch', '', 'Inactive');
-            updatePipeline('hi-branch', '', 'Inactive');
-            updatePipeline('ar-branch', '', 'Inactive');
-            
-            if (val.trim() && lang !== 'detecting') {
-                updatePipeline('input', 'active', `${val.length} chars`);
-                updatePipeline('lang', 'active', lang === 'en' ? 'en_us' : lang === 'hi' ? 'hi_in' : 'ar_eg');
-                updateConnector(1, 'active');
-                updateConnector(2, 'active');
-                
-                const activeBranch = lang === 'en' ? 'en-branch' : lang === 'hi' ? 'hi-branch' : 'ar-branch';
-                updatePipeline(activeBranch, 'active-' + lang, 'Selected');
+
+            if (reason === 'completed') {
+                if (statusEl) statusEl.textContent = 'Pipeline Finished';
+                updatePipeline('livekit', 'success', 'Finished');
+                updatePipeline('audio', 'success', 'Completed');
+                updateConnector(3, 'success');
+                updateConnector(4, 'success');
             } else {
-                updatePipeline('input', '', 'Empty');
-                updatePipeline('lang', '', 'Detecting');
-                updateConnector(1, '');
-                updateConnector(2, '');
+                if (statusEl) statusEl.textContent = 'System Idle';
+                
+                updatePipeline('en-branch', '', 'Inactive');
+                updatePipeline('hi-branch', '', 'Inactive');
+                updatePipeline('ar-branch', '', 'Inactive');
+                
+                if (val.trim() && lang !== 'detecting') {
+                    updatePipeline('input', 'active', `${val.length} chars`);
+                    updatePipeline('lang', 'active', lang === 'en' ? 'en_us' : lang === 'hi' ? 'hi_in' : 'ar_eg');
+                    updateConnector(1, 'active');
+                    updateConnector(2, 'active');
+                    
+                    const activeBranch = lang === 'en' ? 'en-branch' : lang === 'hi' ? 'hi-branch' : 'ar-branch';
+                    updatePipeline(activeBranch, 'active-' + lang, 'Selected');
+                } else {
+                    updatePipeline('input', '', 'Empty');
+                    updatePipeline('lang', '', 'Detecting');
+                    updateConnector(1, '');
+                    updateConnector(2, '');
+                }
+                
+                updatePipeline('livekit', '', 'Offline');
+                updatePipeline('audio', '', 'Inactive');
+                updateConnector(3, '');
+                updateConnector(4, '');
             }
-            
-            updatePipeline('livekit', '', 'Offline');
-            updatePipeline('audio', '', 'Inactive');
-            updateConnector(3, '');
-            updateConnector(4, '');
         }
     </script>
 </body>
