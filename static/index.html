@@ -532,6 +532,110 @@
                 align-self: center;
             }
         }
+
+        /* Parallel Branches Styling */
+        .parallel-branches {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            min-width: 170px;
+            flex: 1.2;
+        }
+
+        .branch-step {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 12px;
+            background: rgba(255, 255, 255, 0.01);
+            border: 1px solid rgba(255, 255, 255, 0.03);
+            border-radius: 10px;
+            transition: all 0.4s ease;
+            opacity: 0.25;
+        }
+
+        .branch-step .step-icon {
+            font-size: 0.75rem;
+            font-weight: 800;
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
+        }
+
+        .branch-step.active-en {
+            opacity: 1;
+            background: rgba(79, 172, 254, 0.08);
+            border-color: rgba(79, 172, 254, 0.3);
+            box-shadow: 0 0 12px rgba(79, 172, 254, 0.15);
+        }
+
+        .branch-step.active-en .step-icon {
+            background: #4facfe;
+            color: #0b0b14;
+        }
+
+        .branch-step.active-hi {
+            opacity: 1;
+            background: rgba(255, 153, 51, 0.08);
+            border-color: rgba(255, 153, 51, 0.3);
+            box-shadow: 0 0 12px rgba(255, 153, 51, 0.15);
+        }
+
+        .branch-step.active-hi .step-icon {
+            background: #ff9933;
+            color: #0b0b14;
+        }
+
+        .branch-step.active-ar {
+            opacity: 1;
+            background: rgba(0, 230, 118, 0.08);
+            border-color: rgba(0, 230, 118, 0.3);
+            box-shadow: 0 0 12px rgba(0, 230, 118, 0.15);
+        }
+
+        .branch-step.active-ar .step-icon {
+            background: #00e676;
+            color: #0b0b14;
+        }
+
+        .branch-step.processing {
+            opacity: 1;
+            background: rgba(0, 245, 255, 0.05);
+            border-color: rgba(0, 245, 255, 0.25);
+            animation: pulse-glow 1.5s infinite alternate;
+        }
+
+        .branch-step.processing .step-icon {
+            background: var(--secondary);
+            color: #0b0b14;
+        }
+
+        .branch-step.error {
+            opacity: 1;
+            background: rgba(244, 67, 54, 0.08);
+            border-color: rgba(244, 67, 54, 0.3);
+            box-shadow: 0 0 12px rgba(244, 67, 54, 0.15);
+        }
+
+        .branch-step.error .step-icon {
+            background: #f44336;
+            color: #fff;
+        }
+
+        @media (max-width: 768px) {
+            .parallel-branches {
+                flex-direction: row;
+                flex-wrap: wrap;
+                justify-content: space-between;
+                gap: 8px;
+                width: 100%;
+            }
+            .branch-step {
+                flex: 1;
+                min-width: 110px;
+                padding: 6px 10px;
+            }
+        }
     </style>
     <!-- LiveKit Client SDK -->
     <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
@@ -602,14 +706,31 @@
 
                 <div id="conn-2" class="flow-connector"></div>
 
-                <!-- Step 3: TTS Engine -->
-                <div id="step-tts" class="flow-step">
-                    <div class="step-icon">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="22"></line></svg>
+                <!-- Step 3: Parallel TTS Branches -->
+                <div class="parallel-branches">
+                    <!-- EN Branch -->
+                    <div id="step-en-branch" class="branch-step">
+                        <div class="step-icon">EN</div>
+                        <div class="step-details">
+                            <div class="step-name">English pipeline</div>
+                            <div id="flow-en-branch-sub" class="step-sub">Inactive</div>
+                        </div>
                     </div>
-                    <div class="step-details">
-                        <div class="step-name">TTS Engine</div>
-                        <div id="flow-tts-sub" class="step-sub">Pending</div>
+                    <!-- HI Branch -->
+                    <div id="step-hi-branch" class="branch-step">
+                        <div class="step-icon">HI</div>
+                        <div class="step-details">
+                            <div class="step-name">Hindi pipeline</div>
+                            <div id="flow-hi-branch-sub" class="step-sub">Inactive</div>
+                        </div>
+                    </div>
+                    <!-- AR Branch -->
+                    <div id="step-ar-branch" class="branch-step">
+                        <div class="step-icon">AR</div>
+                        <div class="step-details">
+                            <div class="step-name">Arabic pipeline</div>
+                            <div id="flow-ar-branch-sub" class="step-sub">Inactive</div>
+                        </div>
                     </div>
                 </div>
 
@@ -728,7 +849,7 @@
         function updatePipeline(stepId, state, subtitle) {
             const stepEl = document.getElementById(`step-${stepId}`);
             if (!stepEl) return;
-            stepEl.classList.remove('active', 'processing', 'success', 'error');
+            stepEl.classList.remove('active', 'processing', 'success', 'error', 'active-en', 'active-hi', 'active-ar');
             if (state) stepEl.classList.add(state);
             if (subtitle !== undefined) {
                 const subEl = document.getElementById(`flow-${stepId}-sub`);
@@ -773,6 +894,11 @@
             
             langBadge.className = 'badge';
             
+            // Clear parallel branches
+            updatePipeline('en-branch', '', 'Inactive');
+            updatePipeline('hi-branch', '', 'Inactive');
+            updatePipeline('ar-branch', '', 'Inactive');
+            
             // Update pipeline input details
             if (val.trim()) {
                 updatePipeline('input', 'active', `${val.length} chars`);
@@ -791,16 +917,19 @@
                 langText.textContent = 'English (US) Script';
                 updatePipeline('lang', 'active', 'en_us');
                 updateConnector(2, 'active');
+                updatePipeline('en-branch', 'active-en', 'Selected');
             } else if (lang === 'hi') {
                 langBadge.classList.add('hi');
                 langText.textContent = 'Hindi (IN) Script';
                 updatePipeline('lang', 'active', 'hi_in');
                 updateConnector(2, 'active');
+                updatePipeline('hi-branch', 'active-hi', 'Selected');
             } else if (lang === 'ar') {
                 langBadge.classList.add('ar');
                 langText.textContent = 'Arabic (EG) Script';
                 updatePipeline('lang', 'active', 'ar_eg');
                 updateConnector(2, 'active');
+                updatePipeline('ar-branch', 'active-ar', 'Selected');
             }
         });
 
@@ -924,13 +1053,19 @@
             // Highlight active nodes
             const lang = detectLanguageCode(text);
             const langCode = lang === 'en' ? 'en_us' : lang === 'hi' ? 'hi_in' : 'ar_eg';
+            const activeBranch = lang === 'en' ? 'en-branch' : lang === 'hi' ? 'hi-branch' : 'ar-branch';
             
             updatePipeline('input', 'success', `${text.length} chars`);
             updateConnector(1, 'success');
             updatePipeline('lang', 'success', langCode);
             updateConnector(2, 'success');
             
-            updatePipeline('tts', 'processing', 'Checking status...');
+            // Clear other branches
+            updatePipeline('en-branch', '', 'Inactive');
+            updatePipeline('hi-branch', '', 'Inactive');
+            updatePipeline('ar-branch', '', 'Inactive');
+            
+            updatePipeline(activeBranch, 'processing', 'Checking status...');
             updateConnector(3, 'processing');
 
             let data;
@@ -947,12 +1082,12 @@
                         const errDetail = await response.json();
                         errMsg = errDetail.detail || errMsg;
                     } catch (e) {}
-                    throw { step: 'tts', message: errMsg };
+                    throw { step: activeBranch, message: errMsg };
                 }
 
                 data = await response.json(); // { room: "...", token: "...", url: "..." }
                 
-                updatePipeline('tts', 'success', 'local_api');
+                updatePipeline(activeBranch, 'active-' + lang, data.provider);
                 updateConnector(3, 'success');
                 
                 updatePipeline('livekit', 'processing', 'Connecting...');
@@ -1073,7 +1208,8 @@
             } catch (err) {
                 console.error(err);
                 
-                const step = err.step || 'tts';
+                const activeBranch = lang === 'en' ? 'en-branch' : lang === 'hi' ? 'hi-branch' : 'ar-branch';
+                const step = err.step || activeBranch;
                 const msg = err.message || "Failed to establish WebRTC connection.";
                 
                 updatePipeline(step, 'error', 'Failed');
@@ -1151,7 +1287,25 @@
             const statusEl = document.getElementById('pipeline-status');
             if (statusEl) statusEl.textContent = 'System Idle';
             
-            updatePipeline('tts', '', 'Pending');
+            updatePipeline('en-branch', '', 'Inactive');
+            updatePipeline('hi-branch', '', 'Inactive');
+            updatePipeline('ar-branch', '', 'Inactive');
+            
+            if (val.trim() && lang !== 'detecting') {
+                updatePipeline('input', 'active', `${val.length} chars`);
+                updatePipeline('lang', 'active', lang === 'en' ? 'en_us' : lang === 'hi' ? 'hi_in' : 'ar_eg');
+                updateConnector(1, 'active');
+                updateConnector(2, 'active');
+                
+                const activeBranch = lang === 'en' ? 'en-branch' : lang === 'hi' ? 'hi-branch' : 'ar-branch';
+                updatePipeline(activeBranch, 'active-' + lang, 'Selected');
+            } else {
+                updatePipeline('input', '', 'Empty');
+                updatePipeline('lang', '', 'Detecting');
+                updateConnector(1, '');
+                updateConnector(2, '');
+            }
+            
             updatePipeline('livekit', '', 'Offline');
             updatePipeline('audio', '', 'Inactive');
             updateConnector(3, '');

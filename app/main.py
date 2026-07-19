@@ -142,7 +142,10 @@ async def api_synthesize(req: SynthesizeRequest):
     return {
         "room": room_name,
         "token": user_token,
-        "url": livekit_url
+        "url": livekit_url,
+        "language": lang,
+        "provider": cfg["provider"],
+        "provider_url": cfg["url"] or ("http://localhost:5000" if cfg["provider"] == "piper_http" else "mock")
     }
 
 # Serve UI static index.html at root
