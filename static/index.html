@@ -367,6 +367,171 @@
             align-items: center;
             gap: 10px;
         }
+
+        /* Pipeline Visualizer styles */
+        .pipeline-card {
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: var(--radius);
+            padding: 25px;
+            margin-bottom: 25px;
+            transition: all 0.3s ease;
+        }
+
+        .pipeline-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .pipeline-title {
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted);
+            font-weight: 600;
+        }
+
+        .pipeline-status-text {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        .pipeline-flow {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .flow-step {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 16px;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            flex: 1;
+            min-width: 140px;
+            transition: all 0.4s ease;
+        }
+
+        .flow-step.active {
+            background: rgba(138, 43, 226, 0.08);
+            border-color: rgba(138, 43, 226, 0.3);
+            box-shadow: 0 0 15px rgba(138, 43, 226, 0.15);
+        }
+
+        .flow-step.processing {
+            background: rgba(0, 245, 255, 0.05);
+            border-color: rgba(0, 245, 255, 0.25);
+            animation: pulse-glow 1.5s infinite alternate;
+        }
+
+        .flow-step.success {
+            background: rgba(0, 230, 118, 0.08);
+            border-color: rgba(0, 230, 118, 0.3);
+            box-shadow: 0 0 15px rgba(0, 230, 118, 0.15);
+        }
+
+        .flow-step.error {
+            background: rgba(244, 67, 54, 0.08);
+            border-color: rgba(244, 67, 54, 0.3);
+            box-shadow: 0 0 15px rgba(244, 67, 54, 0.15);
+        }
+
+        .step-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-muted);
+            transition: all 0.4s ease;
+        }
+
+        .flow-step.active .step-icon {
+            background: var(--primary);
+            color: #fff;
+        }
+
+        .flow-step.processing .step-icon {
+            background: var(--secondary);
+            color: #0b0b14;
+        }
+
+        .flow-step.success .step-icon {
+            background: var(--accent-ar);
+            color: #0b0b14;
+        }
+
+        .flow-step.error .step-icon {
+            background: #f44336;
+            color: #fff;
+        }
+
+        .step-details {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .step-name {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-color);
+        }
+
+        .step-sub {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 2px;
+            max-width: 120px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .flow-connector {
+            height: 2px;
+            flex-grow: 1;
+            background: rgba(255, 255, 255, 0.05);
+            min-width: 15px;
+            max-width: 40px;
+            transition: all 0.4s ease;
+        }
+
+        .flow-connector.active {
+            background: linear-gradient(90deg, var(--primary) 0%, var(--secondary) 100%);
+        }
+
+        .flow-connector.success {
+            background: var(--accent-ar);
+        }
+
+        @keyframes pulse-glow {
+            from { box-shadow: 0 0 5px rgba(0, 245, 255, 0.1); }
+            to { box-shadow: 0 0 20px rgba(0, 245, 255, 0.35); }
+        }
+
+        @media (max-width: 768px) {
+            .pipeline-flow {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .flow-connector {
+                width: 2px;
+                height: 15px;
+                min-width: 2px;
+                max-width: 2px;
+                align-self: center;
+            }
+        }
     </style>
     <!-- LiveKit Client SDK -->
     <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
@@ -402,6 +567,78 @@
                 <span class="spinner"></span>
                 <span class="btn-text">Generate Speech</span>
             </button>
+        </div>
+
+        <!-- Pipeline Visualizer -->
+        <div class="pipeline-card">
+            <div class="pipeline-header">
+                <span class="pipeline-title">System Orchestrator Data Flow</span>
+                <span id="pipeline-status" class="pipeline-status-text">System Idle</span>
+            </div>
+            <div class="pipeline-flow">
+                <!-- Step 1: Input -->
+                <div id="step-input" class="flow-step">
+                    <div class="step-icon">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                    </div>
+                    <div class="step-details">
+                        <div class="step-name">Input Text</div>
+                        <div id="flow-input-sub" class="step-sub">Empty</div>
+                    </div>
+                </div>
+
+                <div id="conn-1" class="flow-connector"></div>
+
+                <!-- Step 2: Language Filter -->
+                <div id="step-lang" class="flow-step">
+                    <div class="step-icon">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+                    </div>
+                    <div class="step-details">
+                        <div class="step-name">Lang Filter</div>
+                        <div id="flow-lang-sub" class="step-sub">Detecting</div>
+                    </div>
+                </div>
+
+                <div id="conn-2" class="flow-connector"></div>
+
+                <!-- Step 3: TTS Engine -->
+                <div id="step-tts" class="flow-step">
+                    <div class="step-icon">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="22"></line></svg>
+                    </div>
+                    <div class="step-details">
+                        <div class="step-name">TTS Engine</div>
+                        <div id="flow-tts-sub" class="step-sub">Pending</div>
+                    </div>
+                </div>
+
+                <div id="conn-3" class="flow-connector"></div>
+
+                <!-- Step 4: LiveKit Server -->
+                <div id="step-livekit" class="flow-step">
+                    <div class="step-icon">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg>
+                    </div>
+                    <div class="step-details">
+                        <div class="step-name">WebRTC Hub</div>
+                        <div id="flow-livekit-sub" class="step-sub">Offline</div>
+                    </div>
+                </div>
+
+                <div id="conn-4" class="flow-connector"></div>
+
+                <!-- Step 5: Audio Out -->
+                <div id="step-audio" class="flow-step">
+                    <div class="step-icon">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+                    </div>
+                    <div class="step-details">
+                        <div class="step-name">Audio Output</div>
+                        <div id="flow-audio-sub" class="step-sub">Inactive</div>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Waveform player card -->
@@ -487,6 +724,25 @@
         const canvas = document.getElementById('visualizer-canvas');
         const canvasCtx = canvas.getContext('2d');
 
+        // Pipeline visualization helpers
+        function updatePipeline(stepId, state, subtitle) {
+            const stepEl = document.getElementById(`step-${stepId}`);
+            if (!stepEl) return;
+            stepEl.classList.remove('active', 'processing', 'success', 'error');
+            if (state) stepEl.classList.add(state);
+            if (subtitle !== undefined) {
+                const subEl = document.getElementById(`flow-${stepId}-sub`);
+                if (subEl) subEl.textContent = subtitle;
+            }
+        }
+
+        function updateConnector(connNum, state) {
+            const connEl = document.getElementById(`conn-${connNum}`);
+            if (!connEl) return;
+            connEl.className = 'flow-connector';
+            if (state) connEl.classList.add(state);
+        }
+
         // Language script detector
         function detectLanguageCode(text) {
             let counts = { en: 0, hi: 0, ar: 0 };
@@ -517,17 +773,34 @@
             
             langBadge.className = 'badge';
             
+            // Update pipeline input details
+            if (val.trim()) {
+                updatePipeline('input', 'active', `${val.length} chars`);
+                updateConnector(1, 'active');
+            } else {
+                updatePipeline('input', '', 'Empty');
+                updateConnector(1, '');
+            }
+
             if (lang === 'detecting') {
                 langText.textContent = 'Detecting Language';
+                updatePipeline('lang', '', 'Detecting');
+                updateConnector(2, '');
             } else if (lang === 'en') {
                 langBadge.classList.add('en');
                 langText.textContent = 'English (US) Script';
+                updatePipeline('lang', 'active', 'en_us');
+                updateConnector(2, 'active');
             } else if (lang === 'hi') {
                 langBadge.classList.add('hi');
                 langText.textContent = 'Hindi (IN) Script';
+                updatePipeline('lang', 'active', 'hi_in');
+                updateConnector(2, 'active');
             } else if (lang === 'ar') {
                 langBadge.classList.add('ar');
                 langText.textContent = 'Arabic (EG) Script';
+                updatePipeline('lang', 'active', 'ar_eg');
+                updateConnector(2, 'active');
             }
         });
 
@@ -644,6 +917,23 @@
             // Stop current playback if active
             stopAudio();
 
+            // Set pipeline status
+            const statusEl = document.getElementById('pipeline-status');
+            if (statusEl) statusEl.textContent = 'Processing request...';
+            
+            // Highlight active nodes
+            const lang = detectLanguageCode(text);
+            const langCode = lang === 'en' ? 'en_us' : lang === 'hi' ? 'hi_in' : 'ar_eg';
+            
+            updatePipeline('input', 'success', `${text.length} chars`);
+            updateConnector(1, 'success');
+            updatePipeline('lang', 'success', langCode);
+            updateConnector(2, 'success');
+            
+            updatePipeline('tts', 'processing', 'Checking status...');
+            updateConnector(3, 'processing');
+
+            let data;
             try {
                 const response = await fetch('/api/synthesize', {
                     method: 'POST',
@@ -657,11 +947,17 @@
                         const errDetail = await response.json();
                         errMsg = errDetail.detail || errMsg;
                     } catch (e) {}
-                    throw new Error(errMsg);
+                    throw { step: 'tts', message: errMsg };
                 }
 
-                const data = await response.json(); // { room: "...", token: "...", url: "..." }
+                data = await response.json(); // { room: "...", token: "...", url: "..." }
                 
+                updatePipeline('tts', 'success', 'local_api');
+                updateConnector(3, 'success');
+                
+                updatePipeline('livekit', 'processing', 'Connecting...');
+                updateConnector(4, 'processing');
+
                 // Pre-flight reachability check for LiveKit port to avoid hanging/infinite loading
                 const testHttpUrl = data.url.replace(/^ws/, 'http');
                 try {
@@ -670,7 +966,7 @@
                     await fetch(testHttpUrl, { mode: 'no-cors', signal: controller.signal });
                     clearTimeout(timeoutId);
                 } catch (connErr) {
-                    throw new Error("LiveKit Server is offline. Please run 'livekit-server --dev' in another terminal.");
+                    throw { step: 'livekit', message: "LiveKit Server is offline. Please run 'livekit-server --dev' in another terminal." };
                 }
 
                 // Hide download button since we are WebRTC streaming
@@ -720,6 +1016,10 @@
 
                         drawVisualizer();
 
+                        // Update pipeline step
+                        updatePipeline('audio', 'success', 'Streaming');
+                        if (statusEl) statusEl.textContent = 'Audio Stream Active';
+
                         // Resolve the subscription promise
                         trackSubscribedResolve();
                     }
@@ -742,14 +1042,29 @@
                 const timeoutPromise = new Promise((_, reject) =>
                     setTimeout(() => reject(new Error("Connection to LiveKit room timed out. Please check if LiveKit server is running.")), 15000)
                 );
-                await Promise.race([connectPromise, timeoutPromise]);
+                try {
+                    await Promise.race([connectPromise, timeoutPromise]);
+                } catch (lkErr) {
+                    throw { step: 'livekit', message: lkErr.message };
+                }
+                
                 console.log("Connected to room successfully. Waiting for audio stream...");
+                updatePipeline('livekit', 'success', 'Connected');
+                updateConnector(4, 'success');
+                
+                updatePipeline('audio', 'processing', 'Buffering...');
+                if (statusEl) statusEl.textContent = 'Waiting for audio stream...';
 
                 // Race track subscription with a timeout
                 const subscriptionTimeoutPromise = new Promise((_, reject) =>
                     setTimeout(() => reject(new Error("Timeout waiting for audio stream. Please check if the TTS engine/model server is online.")), 8000)
                 );
-                await Promise.race([trackSubscribedPromise, subscriptionTimeoutPromise]);
+                try {
+                    await Promise.race([trackSubscribedPromise, subscriptionTimeoutPromise]);
+                } catch (subErr) {
+                    throw { step: 'audio', message: subErr.message };
+                }
+                
                 console.log("Audio stream received successfully.");
 
                 synthesizeBtn.classList.remove('loading');
@@ -757,7 +1072,14 @@
 
             } catch (err) {
                 console.error(err);
-                showError(err.message || "Failed to establish WebRTC connection.");
+                
+                const step = err.step || 'tts';
+                const msg = err.message || "Failed to establish WebRTC connection.";
+                
+                updatePipeline(step, 'error', 'Failed');
+                if (statusEl) statusEl.textContent = 'Error: ' + msg;
+                
+                showError(msg);
                 synthesizeBtn.classList.remove('loading');
                 synthesizeBtn.disabled = false;
             }
@@ -818,6 +1140,22 @@
             if (animationId) {
                 cancelAnimationFrame(animationId);
             }
+            // Hide visualizer card
+            if (visualizerCard) {
+                visualizerCard.classList.remove('active');
+            }
+
+            // Reset pipeline state
+            const val = textInput.value;
+            const lang = detectLanguageCode(val);
+            const statusEl = document.getElementById('pipeline-status');
+            if (statusEl) statusEl.textContent = 'System Idle';
+            
+            updatePipeline('tts', '', 'Pending');
+            updatePipeline('livekit', '', 'Offline');
+            updatePipeline('audio', '', 'Inactive');
+            updateConnector(3, '');
+            updateConnector(4, '');
         }
     </script>
 </body>

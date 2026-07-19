@@ -105,6 +105,29 @@ async def api_synthesize(req: SynthesizeRequest):
     if not req.text.strip():
         raise HTTPException(status_code=400, detail="Text payload cannot be empty")
 
+    # Pre-flight check TTS service availability
+    from app.config import get_tts_config
+    from app.utils.language import detect_language
+    import socket
+    from urllib.parse import urlparse
+
+    lang = detect_language(req.text)
+    cfg = get_tts_config(lang)
+    if cfg["provider"] in ("local_api", "piper_http"):
+        tts_url = cfg["url"]
+        if tts_url:
+            parsed = urlparse(tts_url)
+            host = parsed.hostname or "localhost"
+            port = parsed.port or (80 if parsed.scheme == "http" else 443)
+            try:
+                with socket.create_connection((host, port), timeout=1.0):
+                    pass
+            except Exception:
+                raise HTTPException(
+                    status_code=503,
+                    detail=f"TTS server at {tts_url} is offline. Please make sure the model server is running."
+                )
+
     # Generate a unique room name and tokens
     room_name = f"room_{uuid.uuid4().hex[:12]}"
     bot_token = generate_livekit_token(room_name, f"bot_{uuid.uuid4().hex[:4]}")
