@@ -68,23 +68,12 @@ class LocalHttpTTSService(FrameProcessor):
                             direction
                         )
                     else:
-                        print(f"[Error] Self-hosted TTS API returned status: {response.status}")
-                        # Fallback mock
-                        mock_audio = b"\x00" * 32000
-                        await self.push_frame(
-                            TTSAudioRawFrame(audio=mock_audio, sample_rate=16000, num_channels=1),
-                            direction
-                        )
+                        raise Exception(f"Self-hosted TTS API returned status: {response.status}")
             except Exception as e:
                 print(f"[Error] Failed to connect to self-hosted TTS API at {self.api_url}: {e}")
-                # Fallback mock
-                mock_audio = b"\x00" * 32000
-                await self.push_frame(
-                    TTSAudioRawFrame(audio=mock_audio, sample_rate=16000, num_channels=1),
-                    direction
-                )
-                
-            # Send TTSStoppedFrame
-            await self.push_frame(TTSStoppedFrame(), direction)
+                raise e
+            finally:
+                # Send TTSStoppedFrame
+                await self.push_frame(TTSStoppedFrame(), direction)
         else:
             await self.push_frame(frame, direction)

@@ -685,8 +685,14 @@
                 const room = new LivekitClient.Room();
                 currentRoom = room;
 
+                // Create a promise that resolves when we subscribe to the audio track
+                let trackSubscribedResolve;
+                const trackSubscribedPromise = new Promise((resolve) => {
+                    trackSubscribedResolve = resolve;
+                });
+
                 room.on(LivekitClient.RoomEvent.TrackSubscribed, (track, publication, participant) => {
-                    if (track.kind === LivekitClient.TrackKind.Audio) {
+                    if (track.kind === "audio") {
                         console.log("Subscribed to remote audio track:", track.sid);
                         
                         // Attach track to document to play audio
@@ -713,11 +719,14 @@
                         pauseIcon.style.display = 'block';
 
                         drawVisualizer();
+
+                        // Resolve the subscription promise
+                        trackSubscribedResolve();
                     }
                 });
 
                 room.on(LivekitClient.RoomEvent.TrackUnsubscribed, (track, publication, participant) => {
-                    if (track.kind === LivekitClient.TrackKind.Audio) {
+                    if (track.kind === "audio") {
                         console.log("Audio track unsubscribed");
                         track.detach();
                         stopAudio();
@@ -734,7 +743,14 @@
                     setTimeout(() => reject(new Error("Connection to LiveKit room timed out. Please check if LiveKit server is running.")), 15000)
                 );
                 await Promise.race([connectPromise, timeoutPromise]);
-                console.log("Connected to room successfully.");
+                console.log("Connected to room successfully. Waiting for audio stream...");
+
+                // Race track subscription with a timeout
+                const subscriptionTimeoutPromise = new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error("Timeout waiting for audio stream. Please check if the TTS engine/model server is online.")), 8000)
+                );
+                await Promise.race([trackSubscribedPromise, subscriptionTimeoutPromise]);
+                console.log("Audio stream received successfully.");
 
                 synthesizeBtn.classList.remove('loading');
                 synthesizeBtn.disabled = false;
