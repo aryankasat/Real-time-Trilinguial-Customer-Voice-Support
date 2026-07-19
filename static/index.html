@@ -436,6 +436,39 @@
     </div>
 
     <script>
+        // Global error handler to catch uncaught errors and display them in the UI
+        window.addEventListener('error', (event) => {
+            console.error("Uncaught error:", event.error);
+            const msg = event.message || (event.error ? event.error.message : "An unknown error occurred.");
+            const errMessageEl = document.getElementById('error-message');
+            const errBoxEl = document.getElementById('error-box');
+            if (errMessageEl && errBoxEl) {
+                errMessageEl.textContent = msg;
+                errBoxEl.style.display = 'flex';
+            }
+            const btn = document.getElementById('synthesize-btn');
+            if (btn) {
+                btn.classList.remove('loading');
+                btn.disabled = false;
+            }
+        });
+
+        window.addEventListener('unhandledrejection', (event) => {
+            console.error("Unhandled promise rejection:", event.reason);
+            const msg = (event.reason && event.reason.message) ? event.reason.message : "Unhandled promise rejection.";
+            const errMessageEl = document.getElementById('error-message');
+            const errBoxEl = document.getElementById('error-box');
+            if (errMessageEl && errBoxEl) {
+                errMessageEl.textContent = msg;
+                errBoxEl.style.display = 'flex';
+            }
+            const btn = document.getElementById('synthesize-btn');
+            if (btn) {
+                btn.classList.remove('loading');
+                btn.disabled = false;
+            }
+        });
+
         const textInput = document.getElementById('text-input');
         const langBadge = document.getElementById('lang-badge');
         const langText = document.getElementById('lang-text');
@@ -515,6 +548,7 @@
         let startTime = 0;
         let startOffset = 0;
         let animationId = null;
+        let currentRoom = null;
 
         // Resize visualizer canvas
         function resizeCanvas() {
@@ -618,8 +652,12 @@
                 });
 
                 if (!response.ok) {
-                    const errDetail = await response.json();
-                    throw new Error(errDetail.detail || "Speech generation failed.");
+                    let errMsg = "Speech generation failed.";
+                    try {
+                        const errDetail = await response.json();
+                        errMsg = errDetail.detail || errMsg;
+                    } catch (e) {}
+                    throw new Error(errMsg);
                 }
 
                 const data = await response.json(); // { room: "...", token: "...", url: "..." }
@@ -691,7 +729,11 @@
                     stopAudio();
                 });
 
-                await room.connect(data.url, data.token);
+                const connectPromise = room.connect(data.url, data.token);
+                const timeoutPromise = new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error("Connection to LiveKit room timed out. Please check if LiveKit server is running.")), 15000)
+                );
+                await Promise.race([connectPromise, timeoutPromise]);
                 console.log("Connected to room successfully.");
 
                 synthesizeBtn.classList.remove('loading');
