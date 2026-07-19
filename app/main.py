@@ -23,26 +23,35 @@ from app.processors.output_capture import OutputCapture
 from app.services.tts_factory import create_tts_service
 
 class DelayProcessor(FrameProcessor):
-    def __init__(self, delay_seconds: float):
+    def __init__(self, participant_connected: asyncio.Event):
         super().__init__()
-        self.delay_seconds = delay_seconds
+        self.participant_connected = participant_connected
         self.webrtc_established = False
         self._lock = asyncio.Lock()
 
     async def process_frame(self, frame: Frame, direction: FrameDirection):
-        await super().process_frame(frame, direction)
-        
-        # We only want to delay user-facing and termination frames (TextFrame/EndFrame)
-        # to allow transport connection/subscription to settle first.
-        if isinstance(frame, (TextFrame, EndFrame)) and not self.webrtc_established:
-            async with self._lock:
-                if not self.webrtc_established:
-                    print(f"[Orchestrator DelayProcessor] Holding frame '{type(frame).__name__}' for {self.delay_seconds} seconds to establish WebRTC path...")
-                    await asyncio.sleep(self.delay_seconds)
-                    self.webrtc_established = True
-                    print("[Orchestrator DelayProcessor] WebRTC negotiation window complete. Releasing frames.")
-                    
-        await self.push_frame(frame, direction)
+        if isinstance(frame, (TextFrame, EndFrame)):
+            # We only want to delay user-facing and termination frames (TextFrame/EndFrame)
+            # to allow transport connection/subscription to settle first.
+            if not self.webrtc_established:
+                async with self._lock:
+                    if not self.webrtc_established:
+                        print(f"[Orchestrator DelayProcessor] Waiting for participant connection event...")
+                        try:
+                            # Wait up to 10 seconds for the participant connected event
+                            await asyncio.wait_for(self.participant_connected.wait(), timeout=10.0)
+                            print("[Orchestrator DelayProcessor] Participant connected event received. Settle delay active...")
+                            # Add a settle delay (0.8s) to allow WebRTC audio subscription handshake to complete
+                            await asyncio.sleep(0.8)
+                        except asyncio.TimeoutError:
+                            print("[Orchestrator DelayProcessor] Timeout waiting for participant connection event.")
+                        
+                        self.webrtc_established = True
+                        print("[Orchestrator DelayProcessor] WebRTC negotiation window complete. Releasing frames.")
+            await self.push_frame(frame, direction)
+        else:
+            await super().process_frame(frame, direction)
+            await self.push_frame(frame, direction)
 
 class SynthesizeRequest(BaseModel):
     text: str
@@ -74,7 +83,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan, title="Trilingual WebRTC TTS Orchestrator API")
 
-async def run_pipeline(room_name: str, bot_token: str, text: str):
+async def run_pipeline(room_name: str, bot_token: str, text: str, lang: str):
     """
     Asynchronous background worker that runs the Pipecat routing pipeline
     and pushes voice streams to the LiveKit room via WebRTC.
@@ -83,10 +92,8 @@ async def run_pipeline(room_name: str, bot_token: str, text: str):
         session = app.state.session
         livekit_url = os.getenv("LIVEKIT_API_URL", "ws://127.0.0.1:7880")
         
-        # Instantiate local/mock TTS engine services
-        en_tts = create_tts_service("en_us", session)
-        hi_tts = create_tts_service("hi_in", session)
-        ar_tts = create_tts_service("ar_eg", session)
+        # Instantiate the specific TTS engine service needed for the language
+        tts = create_tts_service(lang, session)
 
         # Setup LiveKit transport with 16kHz audio out sample rate matching our synthesizers
         from pipecat.transports.livekit.transport import LiveKitTransport, LiveKitParams
@@ -98,15 +105,24 @@ async def run_pipeline(room_name: str, bot_token: str, text: str):
             params=params
         )
 
-        # Build ParallelPipeline branching
-        parallel = ParallelPipeline(
-            [LanguageFilter("en_us"), en_tts, OutputCapture("en_us")],
-            [LanguageFilter("hi_in"), hi_tts, OutputCapture("hi_in")],
-            [LanguageFilter("ar_eg"), ar_tts, OutputCapture("ar_eg")]
-        )
-        
-        # Pipe parallel outputs straight to WebRTC transport output, using DelayProcessor to hold synthesis for 2.5s
-        pipeline = Pipeline([DelayProcessor(2.5), parallel, transport.output()])
+        participant_connected = asyncio.Event()
+
+        # Directly override transport's client callback to guarantee execution on remote participant join
+        original_callback = transport._client._callbacks.on_participant_connected
+        async def custom_on_participant_connected(participant_id: str):
+            print(f"[Orchestrator] WebRTC Remote Participant connected callback: {participant_id}")
+            participant_connected.set()
+            await original_callback(participant_id)
+
+        transport._client._callbacks.on_participant_connected = custom_on_participant_connected
+
+        # Build sequential pipeline
+        pipeline = Pipeline([
+            DelayProcessor(participant_connected),
+            tts,
+            OutputCapture(lang),
+            transport.output()
+        ])
 
         # Initialize Pipecat task and runner
         task = PipelineWorker(pipeline, params=PipelineParams())
@@ -158,7 +174,7 @@ async def api_synthesize(req: SynthesizeRequest):
     livekit_url = os.getenv("LIVEKIT_API_URL", "ws://127.0.0.1:7880")
     
     # Spawn Pipecat transport connection in the background
-    asyncio.create_task(run_pipeline(room_name, bot_token, req.text))
+    asyncio.create_task(run_pipeline(room_name, bot_token, req.text, lang))
     
     # Return LiveKit connection properties instantly to client
     return {
