@@ -1210,7 +1210,7 @@
 
                 // Race track subscription with a timeout
                 const subscriptionTimeoutPromise = new Promise((_, reject) =>
-                    setTimeout(() => reject(new Error("Timeout waiting for audio stream. Please check if the TTS engine/model server is online.")), 8000)
+                    setTimeout(() => reject(new Error("Timeout waiting for audio stream. Please check if the TTS engine/model server is online.")), 20000)
                 );
                 try {
                     await Promise.race([trackSubscribedPromise, subscriptionTimeoutPromise]);

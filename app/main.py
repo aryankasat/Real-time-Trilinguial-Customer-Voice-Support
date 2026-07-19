@@ -3,7 +3,7 @@ import uuid
 import asyncio
 import aiohttp
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -11,91 +11,48 @@ from pydantic import BaseModel
 from livekit.api import AccessToken, VideoGrants
 
 from pipecat.pipeline.pipeline import Pipeline
-from pipecat.pipeline.parallel_pipeline import ParallelPipeline
 from pipecat.pipeline.task import PipelineWorker, PipelineParams
-from pipecat.pipeline.runner import WorkerRunner
-from pipecat.processors.frame_processor import FrameProcessor, FrameDirection
-from pipecat.frames.frames import Frame, TextFrame, EndFrame
+from pipecat.workers.runner import WorkerRunner
+from pipecat.frames.frames import TextFrame, EndFrame
 
-from app.utils.language import detect_language
-from app.processors.language_filter import LanguageFilter
 from app.processors.output_capture import OutputCapture
 from app.services.tts_factory import create_tts_service
 
-class DelayProcessor(FrameProcessor):
-    def __init__(self, participant_connected: asyncio.Event):
-        super().__init__()
-        self.participant_connected = participant_connected
-        self.webrtc_established = False
-        self._lock = asyncio.Lock()
-
-    async def process_frame(self, frame: Frame, direction: FrameDirection):
-        if isinstance(frame, (TextFrame, EndFrame)):
-            # We only want to delay user-facing and termination frames (TextFrame/EndFrame)
-            # to allow transport connection/subscription to settle first.
-            if not self.webrtc_established:
-                async with self._lock:
-                    if not self.webrtc_established:
-                        print(f"[Orchestrator DelayProcessor] Waiting for participant connection event...")
-                        try:
-                            # Wait up to 10 seconds for the participant connected event
-                            await asyncio.wait_for(self.participant_connected.wait(), timeout=10.0)
-                            print("[Orchestrator DelayProcessor] Participant connected event received. Settle delay active...")
-                            # Add a settle delay (0.8s) to allow WebRTC audio subscription handshake to complete
-                            await asyncio.sleep(0.8)
-                        except asyncio.TimeoutError:
-                            print("[Orchestrator DelayProcessor] Timeout waiting for participant connection event.")
-                        
-                        self.webrtc_established = True
-                        print("[Orchestrator DelayProcessor] WebRTC negotiation window complete. Releasing frames.")
-            await self.push_frame(frame, direction)
-        else:
-            await super().process_frame(frame, direction)
-            await self.push_frame(frame, direction)
 
 class SynthesizeRequest(BaseModel):
     text: str
 
+
 def generate_livekit_token(room_name: str, identity: str) -> str:
-    """
-    Generates a LiveKit JWT AccessToken with room join grants.
-    """
     api_key = os.getenv("LIVEKIT_API_KEY", "devkey")
     api_secret = os.getenv("LIVEKIT_API_SECRET", "secret")
-    
     token = AccessToken(api_key, api_secret)
     token.with_identity(identity)
-    
-    grants = VideoGrants(
-        room_join=True,
-        room=room_name
-    )
-    token.with_grants(grants)
+    token.with_grants(VideoGrants(room_join=True, room=room_name))
     return token.to_jwt()
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: create shared ClientSession
     app.state.session = aiohttp.ClientSession()
     yield
-    # Shutdown: close session
     await app.state.session.close()
+
 
 app = FastAPI(lifespan=lifespan, title="Trilingual WebRTC TTS Orchestrator API")
 
+
 async def run_pipeline(room_name: str, bot_token: str, text: str, lang: str):
     """
-    Asynchronous background worker that runs the Pipecat routing pipeline
-    and pushes voice streams to the LiveKit room via WebRTC.
+    Runs the TTS→LiveKit pipeline. Polls the underlying LiveKit room object
+    directly to detect when the user participant joins, then queues frames.
     """
     try:
         session = app.state.session
         livekit_url = os.getenv("LIVEKIT_API_URL", "ws://127.0.0.1:7880")
-        
-        # Instantiate the specific TTS engine service needed for the language
+
         tts = create_tts_service(lang, session)
 
-        # Setup LiveKit transport with 16kHz audio out sample rate matching our synthesizers
         from pipecat.transports.livekit.transport import LiveKitTransport, LiveKitParams
         params = LiveKitParams(audio_out_sample_rate=16000)
         transport = LiveKitTransport(
@@ -105,45 +62,80 @@ async def run_pipeline(room_name: str, bot_token: str, text: str, lang: str):
             params=params
         )
 
-        participant_connected = asyncio.Event()
-
-        # Directly override transport's client callback to guarantee execution on remote participant join
-        original_callback = transport._client._callbacks.on_participant_connected
-        async def custom_on_participant_connected(participant_id: str):
-            print(f"[Orchestrator] WebRTC Remote Participant connected callback: {participant_id}")
-            participant_connected.set()
-            await original_callback(participant_id)
-
-        transport._client._callbacks.on_participant_connected = custom_on_participant_connected
-
-        # Build sequential pipeline
         pipeline = Pipeline([
-            DelayProcessor(participant_connected),
             tts,
             OutputCapture(lang),
-            transport.output()
+            transport.output(),
         ])
 
-        # Initialize Pipecat task and runner
-        task = PipelineWorker(pipeline, params=PipelineParams())
-        runner = WorkerRunner()
+        task = PipelineWorker(
+            pipeline,
+            params=PipelineParams(),
+            enable_rtvi=False,          # No RTVI protocol — plain TextFrame passthrough
+            enable_turn_tracking=False, # No user/bot turn tracking needed
+            idle_timeout_secs=None,     # No idle timeout — pipeline runs until EndFrame
+        )
+        runner = WorkerRunner(handle_sigint=False)
         await runner.add_workers(task)
 
-        # Queue the text frame and EndFrame upfront to prevent premature worker shutdown
-        await task.queue_frames([TextFrame(text), EndFrame()])
+        print(f"\n[Orchestrator] Bot joining room '{room_name}'...")
 
-        print(f"\n[Orchestrator Backend] Bot connecting to LiveKit room '{room_name}' via WebRTC...")
-        await runner.run()
-        print(f"[Orchestrator Backend] Bot successfully completed playback and left room '{room_name}'")
+        async def wait_then_queue():
+            """
+            Poll transport._client.room.remote_participants directly — no event system.
+            This is the most reliable way to detect user join in output-only mode.
+            """
+            print(f"[Orchestrator] Polling for user participant in room '{room_name}'...")
+            elapsed = 0.0
+            timeout = 15.0
+            poll_interval = 0.2
+
+            # Wait for transport client to be initialized (setup() called by StartFrame)
+            while elapsed < 2.0:
+                try:
+                    _ = transport._client.room
+                    break  # room object exists
+                except Exception:
+                    await asyncio.sleep(0.1)
+                    elapsed += 0.1
+
+            # Reset elapsed for participant polling
+            elapsed = 0.0
+            while elapsed < timeout:
+                try:
+                    participants = transport._client.room.remote_participants
+                    if participants:
+                        identity = list(participants.values())[0].identity
+                        print(f"[Orchestrator] Participant '{identity}' detected in room '{room_name}'!")
+                        # Give WebRTC audio subscription 1.5s to fully settle
+                        await asyncio.sleep(1.5)
+                        break
+                except Exception as e:
+                    pass  # room not ready yet
+
+                await asyncio.sleep(poll_interval)
+                elapsed += poll_interval
+
+            if elapsed >= timeout:
+                print(f"[Orchestrator] No user joined after {timeout}s — sending anyway.")
+
+            print(f"[Orchestrator] Queuing TextFrame + EndFrame for '{room_name}'...")
+            await task.queue_frames([TextFrame(text), EndFrame()])
+
+        await asyncio.gather(runner.run(), wait_then_queue())
+        print(f"[Orchestrator] Pipeline finished for room '{room_name}'")
+
     except Exception as e:
-        print(f"[Error] Background pipeline execution failed in room '{room_name}': {e}")
+        import traceback
+        print(f"[Error] Pipeline failed for room '{room_name}': {e}")
+        traceback.print_exc()
+
 
 @app.post("/api/synthesize")
 async def api_synthesize(req: SynthesizeRequest):
     if not req.text.strip():
         raise HTTPException(status_code=400, detail="Text payload cannot be empty")
 
-    # Pre-flight check TTS service availability
     from app.config import get_tts_config
     from app.utils.language import detect_language
     import socket
@@ -166,17 +158,13 @@ async def api_synthesize(req: SynthesizeRequest):
                     detail=f"TTS server at {tts_url} is offline. Please make sure the model server is running."
                 )
 
-    # Generate a unique room name and tokens
     room_name = f"room_{uuid.uuid4().hex[:12]}"
     bot_token = generate_livekit_token(room_name, f"bot_{uuid.uuid4().hex[:4]}")
     user_token = generate_livekit_token(room_name, f"user_{uuid.uuid4().hex[:4]}")
-    
     livekit_url = os.getenv("LIVEKIT_API_URL", "ws://127.0.0.1:7880")
-    
-    # Spawn Pipecat transport connection in the background
+
     asyncio.create_task(run_pipeline(room_name, bot_token, req.text, lang))
-    
-    # Return LiveKit connection properties instantly to client
+
     return {
         "room": room_name,
         "token": user_token,
@@ -186,13 +174,13 @@ async def api_synthesize(req: SynthesizeRequest):
         "provider_url": cfg["url"] or ("http://localhost:5000" if cfg["provider"] == "piper_http" else "mock")
     }
 
-# Serve UI static index.html at root
+
 @app.get("/")
 async def read_index():
     if not os.path.exists("static/index.html"):
         raise HTTPException(status_code=404, detail="static/index.html not found.")
     return FileResponse("static/index.html")
 
-# Serve other static files
+
 if os.path.exists("static"):
     app.mount("/static", StaticFiles(directory="static"), name="static")
