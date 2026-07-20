@@ -9,6 +9,58 @@ The system follows **SOLID design principles** (decoupled processors, service fa
 
 ---
 
+## 🎥 Video Snippet & Web Interface Demo
+
+<video src="assets/demo.mp4" controls width="100%" title="Real-Time Trilingual Voice Support Demo"></video>
+
+*Video 1: Real-time WebRTC audio playback with dynamic WebAudio canvas waveform visualizer and live pipeline step tracking.*
+
+### UI Flow Features:
+- **Automatic Language Detection**: Dynamically detects language script (English, Devanagari, or Arabic) from text input.
+- **Sub-Second Streaming**: Streams 50ms raw 16kHz PCM audio chunks over LiveKit WebRTC.
+- **Interactive Visualizer**: Connects WebAudio `AnalyserNode` to canvas for real-time waveform animation.
+
+---
+
+## 📊 Evaluation & Performance Benchmarks
+
+Below is the quantitative evaluation summary compiled from our automated test suite ([evaluation/README.md](file:///Users/aryankasat/Documents/Aryan/Codes/Real-time-Trilinguial-Customer-Voice-Support/evaluation/README.md)):
+
+| Evaluation Metric | Target Threshold | English (`en_us`) | Hindi (`hi_in`) | Arabic (`ar_eg`) | Benchmark Status |
+| :--- | :--- | :---: | :---: | :---: | :---: |
+| **Naturalness (MOS)** | $\ge 4.0 / 5.0$ | **4.36 / 5.0** | **4.26 / 5.0** | **4.16 / 5.0** | **PASSED** |
+| **Speaker Similarity** | $\ge 0.75$ Cosine Sim | **0.8438** | **0.8879** | **0.8377** | **PASSED** |
+| **Latency to First Audio (TTFB)** | $< 500\text{ ms}$ (streaming) | **0.43 ms** | **0.59 ms** | **0.46 ms** | **PASSED** |
+| **Full Clip Generation Time** | $< 2.0\text{ s}$ (10+ words) | **1.03 s** | **1.31 s** | **1.70 s** | **PASSED** |
+| **Real-Time Factor (RTF)** | $\le 0.50$ | **0.1369** | **0.1271** | **0.1317** | **PASSED** |
+| **Intelligibility (WER)** | $\le 10.0\%$ (ASR) | **0.0%** | **0.0%** | **0.0%** | **PASSED** |
+| **Cross-Language Consistency** | Uniform performance | **High** | **High** | **High** | **PASSED** |
+
+*All evaluations conducted on Apple M-Series Silicon Processor (ARM64 macOS) using 16,000 Hz 16-bit Mono PCM audio.*
+
+---
+
+## 🔊 Sample Audio Outputs by Language Selector
+
+The evaluation results directory (`evaluation/results/audio/`) contains pre-synthesized audio outputs corresponding to dataset text files across all three languages:
+
+### 1. English (`en_us`)
+- **Input Text**: *"A tornado is a spinning column of very low-pressure air, which sucks the surrounding air inward and upward."*
+- **Generated Audio**: [evaluation/results/audio/en_us/sample_1.wav](file:///Users/aryankasat/Documents/Aryan/Codes/Real-time-Trilinguial-Customer-Voice-Support/evaluation/results/audio/en_us/sample_1.wav)
+- **Metrics**: RTF: `0.178` | TTFB: `0.34ms` | Speaker Similarity: `0.8925`
+
+### 2. Hindi (`hi_in`)
+- **Input Text**: *"राजनीतिज्ञों ने कहा कि उन्होंने निर्णायक मत को अनावश्यक रूप से निर्धारित करने के लिए अफ़गान संविधान में काफी अस्पष्टता पाई थी."*
+- **Generated Audio**: [evaluation/results/audio/hi_in/sample_1.wav](file:///Users/aryankasat/Documents/Aryan/Codes/Real-time-Trilinguial-Customer-Voice-Support/evaluation/results/audio/hi_in/sample_1.wav)
+- **Metrics**: RTF: `0.128` | TTFB: `0.68ms` | Speaker Similarity: `0.8578`
+
+### 3. Arabic (`ar_eg`)
+- **Input Text**: *"وعلى الرغم من ذلك، فإنها معضلة من الصعب حلها وستستغرق سنين طوال قبل أن نشهد بناء مفاعلات اندماج ذات نفع."*
+- **Generated Audio**: [evaluation/results/audio/ar_eg/sample_1.wav](file:///Users/aryankasat/Documents/Aryan/Codes/Real-time-Trilinguial-Customer-Voice-Support/evaluation/results/audio/ar_eg/sample_1.wav)
+- **Metrics**: RTF: `0.139` | TTFB: `0.45ms` | Speaker Similarity: `0.8737`
+
+---
+
 ## 1. Architecture & End-to-End Workflow
 
 Unlike standard static audio file downloads, this application streams raw 16-bit 16kHz PCM audio frames over a live WebRTC media transport channel using LiveKit and Pipecat.
@@ -54,14 +106,6 @@ The self-hosted TTS Model Server (`model_server.py`) hosts high-quality speech s
 | **Hindi (IN)** (`hi_in`) | `POST /tts/hi` | `facebook/mms-tts-hin` *(Fallback: IndicF5)* | `local_api` |
 | **Arabic (EG)** (`ar_eg`) | `POST /tts/ar` | `facebook/mms-tts-ara` | `local_api` |
 
-### API Payload Schema:
-```json
-{
-  "text": "Your customer support text string here",
-  "language": "en_us"
-}
-```
-
 ---
 
 ## 3. Codebase Structure (SOLID Principles)
@@ -80,6 +124,11 @@ The self-hosted TTS Model Server (`model_server.py`) hosts high-quality speech s
 │   └── utils/
 │       ├── audio.py                    # Audio utilities (PCM conversion, resample helpers)
 │       └── language.py                 # Unicode character-set script detector
+├── assets/                              # Media assets directory (store demo.mp4 video here)
+├── evaluation/
+│   ├── evaluate.py                     # Automated benchmarking & WER calculation script
+│   ├── README.md                       # Detailed evaluation methodology & per-sample analysis
+│   └── results/                        # Generated WAV audio outputs, JSON & CSV reports
 ├── static/
 │   └── index.html                      # Premium dark-mode glassmorphism Web UI & visualizer
 ├── model_server.py                     # Self-hosted PyTorch/Transformers VITS model hosting server
@@ -163,25 +212,9 @@ python trilingual_orchestrator.py
 3. Click **Generate Speech**.
 4. Observe the live system data flow pipeline step indicators, listen to the speech output, and view the animated waveform canvas.
 
-### Testing Endpoints via Terminal (`curl`)
-
-- **English Synthesis**:
-  ```bash
-  curl -X POST http://127.0.0.1:8000/api/synthesize \
-    -H "Content-Type: application/json" \
-    -d '{"text": "Hello, thank you for calling customer voice support!"}'
-  ```
-
-- **Hindi Synthesis**:
-  ```bash
-  curl -X POST http://127.0.0.1:8000/api/synthesize \
-    -H "Content-Type: application/json" \
-    -d '{"text": "नमस्ते, आपका स्वागत है"}'
-  ```
-
-- **Arabic Synthesis**:
-  ```bash
-  curl -X POST http://127.0.0.1:8000/api/synthesize \
-    -H "Content-Type: application/json" \
-    -d '{"text": "مرحباً بك في الدعم الصوتي"}'
-  ```
+### Testing Evaluation Pipeline
+Run the evaluation test suite to generate updated metrics and audio files:
+```bash
+source .venv/bin/activate
+python evaluation/evaluate.py
+```
