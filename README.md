@@ -108,6 +108,18 @@ The self-hosted TTS Model Server (`model_server.py`) hosts high-quality speech s
 
 ---
 
+## 💡 Architectural Assumptions & Technical Calls Taken
+
+| # | Key System Assumption | Technical Call Taken to Resolve |
+| :--- | :--- | :--- |
+| **1** | **Model Decoupling**: Large neural speech models (HF MMS VITS) would cause I/O event-loop blocking if hosted directly inside the web orchestrator. | Created a dedicated, standalone Model Server (`model_server.py`) running on Port 5000 with pre-warmed model instances (`lifespan` startup hook). |
+| **2** | **WebRTC Room Disconnection Timing**: In Pipecat 1.5.0, queuing `[TextFrame, EndFrame]` upfront prematurely terminates the LiveKit WebRTC session before synthesis completes. | Introduced `WaitForParticipantProcessor` to hold `TextFrame` until user joins, and deferred `EndFrame` emission to `LocalHttpTTSService`'s `finally:` block after all 50ms audio chunks stream. |
+| **3** | **Script-Based Multilingual Routing**: Customer support text should auto-route without requiring rigid user dropdown toggles or external API dependencies. | Implemented Unicode character range analysis (`app/utils/language.py`) for instant script detection (`\u0900-\u097F` Hindi, `\u0600-\u06FF` Arabic, Latin English). |
+| **4** | **Browser WebAudio Graph & Transport**: Chrome suspends/optimizes WebRTC audio source nodes if not connected to `AudioContext.destination`. | Explicitly enabled `audio_out_enabled=True` in `LiveKitParams` and wired WebAudio graph: `MediaStreamSource -> AnalyserNode -> GainNode(0.001) -> AudioContext.destination`. |
+| **5** | **Reproducible Benchmarks**: Subjective listening tests alone are insufficient to guarantee cross-lingual model performance. | Built an automated evaluation pipeline (`evaluation/evaluate.py`) calculating RTF, streaming TTFB latency, log-mel speaker similarity, and ASR WER via Whisper. |
+
+---
+
 ## 3. Codebase Structure (SOLID Principles)
 
 ```
