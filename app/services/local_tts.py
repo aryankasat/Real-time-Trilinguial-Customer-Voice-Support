@@ -21,18 +21,26 @@ class MockTTSService(FrameProcessor):
 
         if isinstance(frame, TextFrame):
             print(f"[{self.language.upper()} Mock TTS] Synthesizing speech for text: '{frame.text}'")
-            # 1. Send TTSStartedFrame
             await self.push_frame(TTSStartedFrame(), direction)
+            await asyncio.sleep(0.2)
 
-            # 2. Simulate synthesis delay
-            await asyncio.sleep(0.4)
+            import math
+            # 1 second of 440Hz sine wave tone at 16kHz mono 16-bit PCM
+            sample_rate = 16000
+            num_samples = 16000
+            tone_samples = bytearray()
+            for i in range(num_samples):
+                val = int(10000 * math.sin(2 * math.pi * 440 * i / sample_rate))
+                tone_samples.extend(val.to_bytes(2, byteorder='little', signed=True))
 
-            # 3. Send TTSAudioRawFrame (1 second of 16kHz mono 16-bit PCM silence)
-            mock_audio_bytes = b"\x00" * 32000
-            await self.push_frame(TTSAudioRawFrame(audio=mock_audio_bytes, sample_rate=16000, num_channels=1), direction)
+            chunk_size = 1600
+            for i in range(0, len(tone_samples), chunk_size):
+                chunk = bytes(tone_samples[i:i + chunk_size])
+                await self.push_frame(TTSAudioRawFrame(audio=chunk, sample_rate=16000, num_channels=1), direction)
+                await asyncio.sleep(0.048)
 
-            # 4. Send TTSStoppedFrame
             await self.push_frame(TTSStoppedFrame(), direction)
+            await self.push_frame(EndFrame(), direction)
         else:
             await self.push_frame(frame, direction)
 
@@ -68,20 +76,22 @@ class LocalHttpTTSService(FrameProcessor):
                     ) as resp:
                         if resp.status == 200:
                             audio_bytes = await resp.read()
-                            print(f"[{self.language.upper()} TTS] Got {len(audio_bytes)} bytes. Pushing to LiveKit...")
-                            await self.push_frame(
-                                TTSAudioRawFrame(
-                                    audio=audio_bytes,
-                                    sample_rate=16000,
-                                    num_channels=1,
-                                ),
-                                direction,
-                            )
-                            # Sleep for the duration of the audio so transport
-                            # has time to send all packets before EndFrame arrives
-                            duration_secs = len(audio_bytes) / 32000.0
-                            print(f"[{self.language.upper()} TTS] Sleeping {duration_secs:.2f}s for playback...")
-                            await asyncio.sleep(duration_secs + 1.0)
+                            print(f"[{self.language.upper()} TTS] Got {len(audio_bytes)} bytes. Streaming to LiveKit...")
+                            
+                            # Stream in 50ms chunks (1600 bytes for 16kHz 16-bit mono PCM)
+                            chunk_size = 1600
+                            for i in range(0, len(audio_bytes), chunk_size):
+                                chunk = audio_bytes[i:i + chunk_size]
+                                await self.push_frame(
+                                    TTSAudioRawFrame(
+                                        audio=chunk,
+                                        sample_rate=16000,
+                                        num_channels=1,
+                                    ),
+                                    direction,
+                                )
+                                await asyncio.sleep(0.048)
+                            print(f"[{self.language.upper()} TTS] Finished streaming audio frames.")
                         else:
                             body = await resp.text()
                             print(f"[{self.language.upper()} TTS] ERROR: HTTP {resp.status} — {body}")
@@ -91,6 +101,7 @@ class LocalHttpTTSService(FrameProcessor):
                     traceback.print_exc()
                 finally:
                     await self.push_frame(TTSStoppedFrame(), direction)
+                    await self.push_frame(EndFrame(), direction)
 
         elif isinstance(frame, EndFrame):
             # Wait for any in-progress synthesis to finish first

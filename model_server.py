@@ -7,8 +7,22 @@ from fastapi import FastAPI, HTTPException, Response
 from pydantic import BaseModel
 import uvicorn
 
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    print("[Model Server Startup] Pre-warming speech models (English, Hindi, Arabic)...")
+    try:
+        english_fallback_model.load()
+        hindi_fallback_model.load()
+        arabic_mms_model.load()
+        print("[Model Server Startup] All trilingual speech models pre-warmed successfully!")
+    except Exception as e:
+        print(f"[Model Server Startup Warning] Model pre-warming notice: {e}")
+    yield
+
 # Initialize FastAPI App
-app = FastAPI(title="Trilingual TTS Model Hosting Server")
+app = FastAPI(title="Trilingual TTS Model Hosting Server", lifespan=lifespan)
 
 # Pydantic schema matching Pipecat's LocalHttpTTSService payload
 class TTSRequest(BaseModel):

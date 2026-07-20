@@ -1120,61 +1120,70 @@
                 const room = new LivekitClient.Room();
                 currentRoom = room;
 
-                // Create a promise that resolves when we subscribe to the audio track
+                let isTrackHandled = false;
                 let trackSubscribedResolve;
                 const trackSubscribedPromise = new Promise((resolve) => {
                     trackSubscribedResolve = resolve;
                 });
 
+                function handleAudioTrack(track) {
+                    if (track.kind !== "audio" || isTrackHandled) return;
+                    isTrackHandled = true;
+                    console.log("Subscribed/attached to remote audio track:", track.sid);
+                    
+                    // Clean up existing audio elements if any
+                    const oldAudio = document.getElementById("livekit-audio");
+                    if (oldAudio) oldAudio.remove();
+
+                    // Attach track to document for speech playback
+                    const audioElement = track.attach();
+                    audioElement.id = "livekit-audio";
+                    audioElement.muted = false;
+                    document.body.appendChild(audioElement);
+                    audioElement.play().catch(e => console.log("Audio play error:", e));
+                    
+                    // Resume audio context if suspended
+                    if (audioContext && audioContext.state === 'suspended') {
+                        audioContext.resume();
+                    }
+                    
+                    // Wire MediaStream into Web Audio API AnalyserNode for waveform visualizer
+                    analyser = audioContext.createAnalyser();
+                    analyser.fftSize = 256;
+                    
+                    // Chrome requires WebAudio graph to connect to destination for active stream processing
+                    gainNode = audioContext.createGain();
+                    gainNode.gain.value = 0.001;
+                    
+                    const mediaStream = new MediaStream([track.mediaStreamTrack]);
+                    const source = audioContext.createMediaStreamSource(mediaStream);
+                    source.connect(analyser);
+                    analyser.connect(gainNode);
+                    gainNode.connect(audioContext.destination);
+
+                    // Display visualizer controls
+                    const lang = detectLanguageCode(text);
+                    detailLang.textContent = `Language: ${lang === 'en' ? 'en_us' : lang === 'hi' ? 'hi_in' : 'ar_eg'}`;
+                    detailDuration.textContent = `Room: ${data.room}`;
+                    
+                    visualizerCard.classList.add('active');
+                    isPlaying = true;
+                    playIcon.style.display = 'none';
+                    pauseIcon.style.display = 'block';
+
+                    drawVisualizer();
+
+                    // Update pipeline step
+                    updatePipeline('audio', 'success', 'Streaming');
+                    if (statusEl) statusEl.textContent = 'Audio Stream Active';
+
+                    // Resolve the subscription promise
+                    if (trackSubscribedResolve) trackSubscribedResolve();
+                }
+
                 room.on(LivekitClient.RoomEvent.TrackSubscribed, (track, publication, participant) => {
                     if (track.kind === "audio") {
-                        console.log("Subscribed to remote audio track:", track.sid);
-                        
-                        // Attach track to document to play audio
-                        const audioElement = track.attach();
-                        audioElement.id = "livekit-audio";
-                        audioElement.muted = false;
-                        document.body.appendChild(audioElement);
-                        
-                        // Force play to prevent browser autoplay block
-                        audioElement.play().catch(e => console.log("Audio play blocked/interrupted:", e));
-                        
-                        // Resume audio context if it was suspended
-                        if (audioContext && audioContext.state === 'suspended') {
-                            audioContext.resume();
-                        }
-                        
-                        // Wire into Web Audio API for waveform rendering and audio output
-                        analyser = audioContext.createAnalyser();
-                        analyser.fftSize = 256;
-                        
-                        gainNode = audioContext.createGain();
-                        gainNode.gain.value = 1.0;
-                        
-                        const mediaStream = new MediaStream([track.mediaStreamTrack]);
-                        const source = audioContext.createMediaStreamSource(mediaStream);
-                        source.connect(analyser);
-                        analyser.connect(gainNode);
-                        gainNode.connect(audioContext.destination);
-
-                        // Display visualizer controls
-                        const lang = detectLanguageCode(text);
-                        detailLang.textContent = `Language: ${lang === 'en' ? 'en_us' : lang === 'hi' ? 'hi_in' : 'ar_eg'}`;
-                        detailDuration.textContent = `Room: ${data.room}`;
-                        
-                        visualizerCard.classList.add('active');
-                        isPlaying = true;
-                        playIcon.style.display = 'none';
-                        pauseIcon.style.display = 'block';
-
-                        drawVisualizer();
-
-                        // Update pipeline step
-                        updatePipeline('audio', 'success', 'Streaming');
-                        if (statusEl) statusEl.textContent = 'Audio Stream Active';
-
-                        // Resolve the subscription promise
-                        trackSubscribedResolve();
+                        handleAudioTrack(track);
                     }
                 });
 
@@ -1201,9 +1210,18 @@
                     throw { step: 'livekit', message: lkErr.message };
                 }
                 
-                console.log("Connected to room successfully. Waiting for audio stream...");
+                console.log("Connected to room successfully. Checking for active audio tracks...");
                 updatePipeline('livekit', 'success', 'Connected');
                 updateConnector(4, 'success');
+
+                // Immediately check if the bot participant has already published/subscribed an audio track
+                for (const participant of room.remoteParticipants.values()) {
+                    for (const publication of participant.trackPublications.values()) {
+                        if (publication.track && publication.track.kind === "audio") {
+                            handleAudioTrack(publication.track);
+                        }
+                    }
+                }
                 
                 updatePipeline('audio', 'processing', 'Buffering...');
                 if (statusEl) statusEl.textContent = 'Waiting for audio stream...';
@@ -1260,7 +1278,7 @@
                 audioEl.muted = false;
             }
             if (gainNode) {
-                gainNode.gain.value = 1.0;
+                gainNode.gain.value = 0.001;
             }
             isPlaying = true;
             playIcon.style.display = 'none';

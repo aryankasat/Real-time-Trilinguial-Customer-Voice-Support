@@ -54,7 +54,7 @@ async def run_pipeline(room_name: str, bot_token: str, text: str, lang: str):
         tts = create_tts_service(lang, session)
 
         from pipecat.transports.livekit.transport import LiveKitTransport, LiveKitParams
-        params = LiveKitParams(audio_out_sample_rate=16000)
+        params = LiveKitParams(audio_out_enabled=True, audio_out_sample_rate=16000)
         transport = LiveKitTransport(
             url=livekit_url,
             token=bot_token,
@@ -62,7 +62,10 @@ async def run_pipeline(room_name: str, bot_token: str, text: str, lang: str):
             params=params
         )
 
+        from app.processors.wait_for_participant import WaitForParticipantProcessor
+
         pipeline = Pipeline([
+            WaitForParticipantProcessor(transport, timeout=15.0),
             tts,
             OutputCapture(lang),
             transport.output(),
@@ -75,54 +78,15 @@ async def run_pipeline(room_name: str, bot_token: str, text: str, lang: str):
             enable_turn_tracking=False, # No user/bot turn tracking needed
             idle_timeout_secs=None,     # No idle timeout — pipeline runs until EndFrame
         )
+
+        # Queue TextFrame BEFORE running worker (TTS service will push EndFrame after speech streams)
+        await task.queue_frames([TextFrame(text)])
+
         runner = WorkerRunner(handle_sigint=False)
         await runner.add_workers(task)
 
-        print(f"\n[Orchestrator] Bot joining room '{room_name}'...")
-
-        async def wait_then_queue():
-            """
-            Poll transport._client.room.remote_participants directly — no event system.
-            This is the most reliable way to detect user join in output-only mode.
-            """
-            print(f"[Orchestrator] Polling for user participant in room '{room_name}'...")
-            elapsed = 0.0
-            timeout = 15.0
-            poll_interval = 0.2
-
-            # Wait for transport client to be initialized (setup() called by StartFrame)
-            while elapsed < 2.0:
-                try:
-                    _ = transport._client.room
-                    break  # room object exists
-                except Exception:
-                    await asyncio.sleep(0.1)
-                    elapsed += 0.1
-
-            # Reset elapsed for participant polling
-            elapsed = 0.0
-            while elapsed < timeout:
-                try:
-                    participants = transport._client.room.remote_participants
-                    if participants:
-                        identity = list(participants.values())[0].identity
-                        print(f"[Orchestrator] Participant '{identity}' detected in room '{room_name}'!")
-                        # Give WebRTC audio subscription 1.5s to fully settle
-                        await asyncio.sleep(1.5)
-                        break
-                except Exception as e:
-                    pass  # room not ready yet
-
-                await asyncio.sleep(poll_interval)
-                elapsed += poll_interval
-
-            if elapsed >= timeout:
-                print(f"[Orchestrator] No user joined after {timeout}s — sending anyway.")
-
-            print(f"[Orchestrator] Queuing TextFrame + EndFrame for '{room_name}'...")
-            await task.queue_frames([TextFrame(text), EndFrame()])
-
-        await asyncio.gather(runner.run(), wait_then_queue())
+        print(f"\n[Orchestrator] Bot joining room '{room_name}' with text payload queued...")
+        await runner.run()
         print(f"[Orchestrator] Pipeline finished for room '{room_name}'")
 
     except Exception as e:
