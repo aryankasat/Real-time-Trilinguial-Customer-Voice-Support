@@ -3,15 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Trilingual Support Voice Orchestrator</title>
+    <title>Trilingual Voice Support</title>
     <!-- Outfit Font from Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
             --bg-color: #0b0b14;
-            --card-bg: rgba(22, 22, 38, 0.45);
+            --card-bg: rgba(22, 22, 38, 0.5);
             --card-border: rgba(255, 255, 255, 0.08);
             --primary: #8a2be2;
             --primary-glow: rgba(138, 43, 226, 0.4);
@@ -35,7 +35,6 @@
             background-color: var(--bg-color);
             color: var(--text-color);
             font-family: var(--font-family);
-            overflow-x: hidden;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -43,65 +42,34 @@
             padding: 20px;
         }
 
-        /* Decorative ambient glow circles */
-        .ambient-glow-1 {
-            position: absolute;
-            top: 15%;
-            left: 10%;
-            width: 450px;
-            height: 450px;
-            border-radius: 50%;
-            background: radial-gradient(circle, rgba(138, 43, 226, 0.22) 0%, rgba(0,0,0,0) 70%);
-            filter: blur(80px);
-            z-index: -1;
-            pointer-events: none;
-        }
-
-        .ambient-glow-2 {
-            position: absolute;
-            bottom: 10%;
-            right: 10%;
-            width: 500px;
-            height: 500px;
-            border-radius: 50%;
-            background: radial-gradient(circle, rgba(0, 245, 255, 0.15) 0%, rgba(0,0,0,0) 70%);
-            filter: blur(80px);
-            z-index: -1;
-            pointer-events: none;
-        }
-
-        /* Glassmorphism card container */
         .container {
             width: 100%;
-            max-width: 780px;
+            max-width: 640px;
             background: var(--card-bg);
             border: 1px solid var(--card-border);
             border-radius: 24px;
-            backdrop-filter: blur(25px);
-            -webkit-backdrop-filter: blur(25px);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
             box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
-            padding: 40px;
-            position: relative;
-            z-index: 1;
+            padding: 36px;
         }
 
         header {
-            margin-bottom: 30px;
+            margin-bottom: 24px;
             text-align: center;
         }
 
         h1 {
-            font-size: 2.2rem;
-            font-weight: 800;
+            font-size: 2rem;
+            font-weight: 700;
             background: linear-gradient(135deg, #fff 30%, #a18cd1 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
-            margin-bottom: 8px;
-            letter-spacing: -0.5px;
+            margin-bottom: 6px;
         }
 
         p.subtitle {
-            font-size: 0.95rem;
+            font-size: 0.9rem;
             color: var(--text-muted);
             font-weight: 300;
         }
@@ -109,44 +77,40 @@
         .detector-badge-wrapper {
             display: flex;
             justify-content: center;
-            margin-bottom: 25px;
+            margin-bottom: 20px;
         }
 
-        /* Dynamic badge styling */
         .badge {
             display: inline-flex;
             align-items: center;
             gap: 8px;
-            padding: 8px 16px;
+            padding: 6px 14px;
             border-radius: 100px;
-            font-size: 0.85rem;
+            font-size: 0.8rem;
             font-weight: 600;
             text-transform: uppercase;
-            letter-spacing: 1px;
+            letter-spacing: 0.5px;
             background: rgba(255, 255, 255, 0.05);
             border: 1px solid rgba(255, 255, 255, 0.1);
-            transition: all 0.4s ease;
+            transition: all 0.3s ease;
         }
 
         .badge.en {
             color: var(--accent-en);
             background: rgba(79, 172, 254, 0.1);
-            border-color: rgba(79, 172, 254, 0.2);
-            box-shadow: 0 0 15px rgba(79, 172, 254, 0.15);
+            border-color: rgba(79, 172, 254, 0.25);
         }
 
         .badge.hi {
             color: var(--accent-hi);
             background: rgba(255, 153, 51, 0.1);
-            border-color: rgba(255, 153, 51, 0.2);
-            box-shadow: 0 0 15px rgba(255, 153, 51, 0.15);
+            border-color: rgba(255, 153, 51, 0.25);
         }
 
         .badge.ar {
             color: var(--accent-ar);
             background: rgba(0, 230, 118, 0.1);
-            border-color: rgba(0, 230, 118, 0.2);
-            box-shadow: 0 0 15px rgba(0, 230, 118, 0.15);
+            border-color: rgba(0, 230, 118, 0.25);
         }
 
         .badge .dot {
@@ -154,7 +118,7 @@
             height: 8px;
             border-radius: 50%;
             background-color: var(--text-muted);
-            transition: background-color 0.4s ease;
+            transition: background-color 0.3s ease;
         }
 
         .badge.en .dot { background-color: var(--accent-en); }
@@ -162,20 +126,19 @@
         .badge.ar .dot { background-color: var(--accent-ar); }
 
         .input-group {
-            position: relative;
-            margin-bottom: 25px;
+            margin-bottom: 20px;
         }
 
         textarea {
             width: 100%;
-            height: 140px;
+            height: 120px;
             background: rgba(0, 0, 0, 0.25);
             border: 1px solid rgba(255, 255, 255, 0.1);
             border-radius: var(--radius);
             padding: 16px;
             color: var(--text-color);
             font-family: var(--font-family);
-            font-size: 1.05rem;
+            font-size: 1rem;
             line-height: 1.5;
             resize: none;
             outline: none;
@@ -191,38 +154,34 @@
         .btn-container {
             display: flex;
             justify-content: flex-end;
-            gap: 15px;
-            margin-bottom: 30px;
+            gap: 12px;
+            margin-bottom: 20px;
         }
 
         button {
-            padding: 14px 28px;
+            padding: 12px 24px;
             border-radius: var(--radius);
             font-family: var(--font-family);
             font-weight: 600;
-            font-size: 0.95rem;
+            font-size: 0.9rem;
             cursor: pointer;
             outline: none;
             transition: all 0.3s ease;
             display: inline-flex;
             align-items: center;
-            gap: 10px;
+            gap: 8px;
             border: none;
         }
 
         .btn-primary {
             background: linear-gradient(135deg, var(--primary) 0%, #630dd0 100%);
             color: #fff;
-            box-shadow: 0 4px 20px rgba(138, 43, 226, 0.3);
+            box-shadow: 0 4px 15px rgba(138, 43, 226, 0.3);
         }
 
         .btn-primary:hover:not(:disabled) {
             transform: translateY(-2px);
-            box-shadow: 0 6px 24px rgba(138, 43, 226, 0.5);
-        }
-
-        .btn-primary:active:not(:disabled) {
-            transform: translateY(0);
+            box-shadow: 0 6px 20px rgba(138, 43, 226, 0.5);
         }
 
         .btn-primary:disabled {
@@ -240,15 +199,29 @@
             background: rgba(255, 255, 255, 0.1);
         }
 
+        /* Error banner */
+        .error-banner {
+            background: rgba(244, 67, 54, 0.1);
+            border: 1px solid rgba(244, 67, 54, 0.25);
+            color: #ff8a80;
+            padding: 12px 16px;
+            border-radius: var(--radius);
+            margin-bottom: 20px;
+            font-size: 0.85rem;
+            display: none;
+            align-items: center;
+            gap: 8px;
+        }
+
         /* Waveform visualizer container */
         .visualizer-card {
-            background: rgba(0, 0, 0, 0.2);
-            border: 1px solid rgba(255, 255, 255, 0.05);
+            background: rgba(0, 0, 0, 0.25);
+            border: 1px solid rgba(255, 255, 255, 0.08);
             border-radius: var(--radius);
-            padding: 25px;
+            padding: 20px;
             display: flex;
             flex-direction: column;
-            gap: 20px;
+            gap: 16px;
             transition: all 0.3s ease;
             opacity: 0;
             transform: translateY(10px);
@@ -268,9 +241,9 @@
         }
 
         .visualizer-title {
-            font-size: 0.9rem;
+            font-size: 0.85rem;
             text-transform: uppercase;
-            letter-spacing: 1px;
+            letter-spacing: 0.5px;
             color: var(--text-muted);
             font-weight: 600;
         }
@@ -279,19 +252,16 @@
             font-size: 0.8rem;
             color: var(--text-muted);
             display: flex;
-            gap: 15px;
+            gap: 12px;
         }
 
         .waveform-container {
             width: 100%;
-            height: 90px;
+            height: 80px;
             background: rgba(0, 0, 0, 0.3);
             border-radius: 8px;
             overflow: hidden;
             position: relative;
-            display: flex;
-            align-items: center;
-            justify-content: center;
         }
 
         canvas {
@@ -306,35 +276,29 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 20px;
         }
 
         .btn-circle {
-            width: 54px;
-            height: 54px;
+            width: 48px;
+            height: 48px;
             border-radius: 50%;
             padding: 0;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 1.2rem;
-        }
-
-        .btn-circle.play {
             background: var(--secondary);
             color: #0b0b14;
             box-shadow: 0 4px 15px rgba(0, 245, 255, 0.3);
         }
 
-        .btn-circle.play:hover {
+        .btn-circle:hover {
             transform: scale(1.05);
             box-shadow: 0 6px 20px rgba(0, 245, 255, 0.5);
         }
 
-        /* Loading spinner */
         .spinner {
-            width: 20px;
-            height: 20px;
+            width: 18px;
+            height: 18px;
             border: 2px solid rgba(255, 255, 255, 0.2);
             border-radius: 50%;
             border-top-color: #fff;
@@ -342,312 +306,21 @@
             display: none;
         }
 
-        .loading .spinner {
-            display: block;
-        }
-
-        .loading .btn-text {
-            display: none;
-        }
+        .loading .spinner { display: block; }
+        .loading .btn-text { display: none; }
 
         @keyframes spin {
             to { transform: rotate(360deg); }
-        }
-
-        /* Error banner */
-        .error-banner {
-            background: rgba(244, 67, 54, 0.1);
-            border: 1px solid rgba(244, 67, 54, 0.2);
-            color: #ff8a80;
-            padding: 12px 20px;
-            border-radius: var(--radius);
-            margin-bottom: 25px;
-            font-size: 0.9rem;
-            display: none;
-            align-items: center;
-            gap: 10px;
-        }
-
-        /* Pipeline Visualizer styles */
-        .pipeline-card {
-            background: rgba(0, 0, 0, 0.2);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            border-radius: var(--radius);
-            padding: 25px;
-            margin-bottom: 25px;
-            transition: all 0.3s ease;
-        }
-
-        .pipeline-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-        }
-
-        .pipeline-title {
-            font-size: 0.9rem;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            color: var(--text-muted);
-            font-weight: 600;
-        }
-
-        .pipeline-status-text {
-            font-size: 0.85rem;
-            color: var(--text-muted);
-            font-weight: 500;
-        }
-
-        .pipeline-flow {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-
-        .flow-step {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 10px 16px;
-            background: rgba(255, 255, 255, 0.02);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            border-radius: 12px;
-            flex: 1;
-            min-width: 140px;
-            transition: all 0.4s ease;
-        }
-
-        .flow-step.active {
-            background: rgba(138, 43, 226, 0.08);
-            border-color: rgba(138, 43, 226, 0.3);
-            box-shadow: 0 0 15px rgba(138, 43, 226, 0.15);
-        }
-
-        .flow-step.processing {
-            background: rgba(0, 245, 255, 0.05);
-            border-color: rgba(0, 245, 255, 0.25);
-            animation: pulse-glow 1.5s infinite alternate;
-        }
-
-        .flow-step.success {
-            background: rgba(0, 230, 118, 0.08);
-            border-color: rgba(0, 230, 118, 0.3);
-            box-shadow: 0 0 15px rgba(0, 230, 118, 0.15);
-        }
-
-        .flow-step.error {
-            background: rgba(244, 67, 54, 0.08);
-            border-color: rgba(244, 67, 54, 0.3);
-            box-shadow: 0 0 15px rgba(244, 67, 54, 0.15);
-        }
-
-        .step-icon {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 36px;
-            height: 36px;
-            border-radius: 50%;
-            background: rgba(255, 255, 255, 0.05);
-            color: var(--text-muted);
-            transition: all 0.4s ease;
-        }
-
-        .flow-step.active .step-icon {
-            background: var(--primary);
-            color: #fff;
-        }
-
-        .flow-step.processing .step-icon {
-            background: var(--secondary);
-            color: #0b0b14;
-        }
-
-        .flow-step.success .step-icon {
-            background: var(--accent-ar);
-            color: #0b0b14;
-        }
-
-        .flow-step.error .step-icon {
-            background: #f44336;
-            color: #fff;
-        }
-
-        .step-details {
-            display: flex;
-            flex-direction: column;
-        }
-
-        .step-name {
-            font-size: 0.85rem;
-            font-weight: 600;
-            color: var(--text-color);
-        }
-
-        .step-sub {
-            font-size: 0.75rem;
-            color: var(--text-muted);
-            margin-top: 2px;
-            max-width: 120px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .flow-connector {
-            height: 2px;
-            flex-grow: 1;
-            background: rgba(255, 255, 255, 0.05);
-            min-width: 15px;
-            max-width: 40px;
-            transition: all 0.4s ease;
-        }
-
-        .flow-connector.active {
-            background: linear-gradient(90deg, var(--primary) 0%, var(--secondary) 100%);
-        }
-
-        .flow-connector.success {
-            background: var(--accent-ar);
-        }
-
-        @keyframes pulse-glow {
-            from { box-shadow: 0 0 5px rgba(0, 245, 255, 0.1); }
-            to { box-shadow: 0 0 20px rgba(0, 245, 255, 0.35); }
-        }
-
-        @media (max-width: 768px) {
-            .pipeline-flow {
-                flex-direction: column;
-                align-items: stretch;
-            }
-            .flow-connector {
-                width: 2px;
-                height: 15px;
-                min-width: 2px;
-                max-width: 2px;
-                align-self: center;
-            }
-        }
-
-        /* Parallel Branches Styling */
-        .parallel-branches {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            min-width: 170px;
-            flex: 1.2;
-        }
-
-        .branch-step {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 8px 12px;
-            background: rgba(255, 255, 255, 0.01);
-            border: 1px solid rgba(255, 255, 255, 0.03);
-            border-radius: 10px;
-            transition: all 0.4s ease;
-            opacity: 0.25;
-        }
-
-        .branch-step .step-icon {
-            font-size: 0.75rem;
-            font-weight: 800;
-            width: 28px;
-            height: 28px;
-            border-radius: 6px;
-        }
-
-        .branch-step.active-en {
-            opacity: 1;
-            background: rgba(79, 172, 254, 0.08);
-            border-color: rgba(79, 172, 254, 0.3);
-            box-shadow: 0 0 12px rgba(79, 172, 254, 0.15);
-        }
-
-        .branch-step.active-en .step-icon {
-            background: #4facfe;
-            color: #0b0b14;
-        }
-
-        .branch-step.active-hi {
-            opacity: 1;
-            background: rgba(255, 153, 51, 0.08);
-            border-color: rgba(255, 153, 51, 0.3);
-            box-shadow: 0 0 12px rgba(255, 153, 51, 0.15);
-        }
-
-        .branch-step.active-hi .step-icon {
-            background: #ff9933;
-            color: #0b0b14;
-        }
-
-        .branch-step.active-ar {
-            opacity: 1;
-            background: rgba(0, 230, 118, 0.08);
-            border-color: rgba(0, 230, 118, 0.3);
-            box-shadow: 0 0 12px rgba(0, 230, 118, 0.15);
-        }
-
-        .branch-step.active-ar .step-icon {
-            background: #00e676;
-            color: #0b0b14;
-        }
-
-        .branch-step.processing {
-            opacity: 1;
-            background: rgba(0, 245, 255, 0.05);
-            border-color: rgba(0, 245, 255, 0.25);
-            animation: pulse-glow 1.5s infinite alternate;
-        }
-
-        .branch-step.processing .step-icon {
-            background: var(--secondary);
-            color: #0b0b14;
-        }
-
-        .branch-step.error {
-            opacity: 1;
-            background: rgba(244, 67, 54, 0.08);
-            border-color: rgba(244, 67, 54, 0.3);
-            box-shadow: 0 0 12px rgba(244, 67, 54, 0.15);
-        }
-
-        .branch-step.error .step-icon {
-            background: #f44336;
-            color: #fff;
-        }
-
-        @media (max-width: 768px) {
-            .parallel-branches {
-                flex-direction: row;
-                flex-wrap: wrap;
-                justify-content: space-between;
-                gap: 8px;
-                width: 100%;
-            }
-            .branch-step {
-                flex: 1;
-                min-width: 110px;
-                padding: 6px 10px;
-            }
         }
     </style>
     <!-- LiveKit Client SDK -->
     <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
 </head>
 <body>
-    <div class="ambient-glow-1"></div>
-    <div class="ambient-glow-2"></div>
-
     <div class="container">
         <header>
-            <h1>Trilingual Support Orchestrator</h1>
-            <p class="subtitle">Self-hosted customer voice synthesis for English, Hindi, and Arabic</p>
+            <h1>Trilingual Voice Support</h1>
+            <p class="subtitle">Voice synthesis for English, Hindi, and Arabic</p>
         </header>
 
         <div class="detector-badge-wrapper">
@@ -662,7 +335,7 @@
         </div>
 
         <div class="input-group">
-            <textarea id="text-input" placeholder="Type customer support request here in English, Hindi (नमस्ते) or Arabic (مرحباً)..."></textarea>
+            <textarea id="text-input" placeholder="Type customer support request in English, Hindi (नमस्ते), or Arabic (مرحباً)..."></textarea>
         </div>
 
         <div class="btn-container">
@@ -673,102 +346,13 @@
             </button>
         </div>
 
-        <!-- Pipeline Visualizer -->
-        <div class="pipeline-card">
-            <div class="pipeline-header">
-                <span class="pipeline-title">System Orchestrator Data Flow</span>
-                <span id="pipeline-status" class="pipeline-status-text">System Idle</span>
-            </div>
-            <div class="pipeline-flow">
-                <!-- Step 1: Input -->
-                <div id="step-input" class="flow-step">
-                    <div class="step-icon">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-                    </div>
-                    <div class="step-details">
-                        <div class="step-name">Input Text</div>
-                        <div id="flow-input-sub" class="step-sub">Empty</div>
-                    </div>
-                </div>
-
-                <div id="conn-1" class="flow-connector"></div>
-
-                <!-- Step 2: Language Filter -->
-                <div id="step-lang" class="flow-step">
-                    <div class="step-icon">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
-                    </div>
-                    <div class="step-details">
-                        <div class="step-name">Lang Filter</div>
-                        <div id="flow-lang-sub" class="step-sub">Detecting</div>
-                    </div>
-                </div>
-
-                <div id="conn-2" class="flow-connector"></div>
-
-                <!-- Step 3: Parallel TTS Branches -->
-                <div class="parallel-branches">
-                    <!-- EN Branch -->
-                    <div id="step-en-branch" class="branch-step">
-                        <div class="step-icon">EN</div>
-                        <div class="step-details">
-                            <div class="step-name">English pipeline</div>
-                            <div id="flow-en-branch-sub" class="step-sub">Inactive</div>
-                        </div>
-                    </div>
-                    <!-- HI Branch -->
-                    <div id="step-hi-branch" class="branch-step">
-                        <div class="step-icon">HI</div>
-                        <div class="step-details">
-                            <div class="step-name">Hindi pipeline</div>
-                            <div id="flow-hi-branch-sub" class="step-sub">Inactive</div>
-                        </div>
-                    </div>
-                    <!-- AR Branch -->
-                    <div id="step-ar-branch" class="branch-step">
-                        <div class="step-icon">AR</div>
-                        <div class="step-details">
-                            <div class="step-name">Arabic pipeline</div>
-                            <div id="flow-ar-branch-sub" class="step-sub">Inactive</div>
-                        </div>
-                    </div>
-                </div>
-
-                <div id="conn-3" class="flow-connector"></div>
-
-                <!-- Step 4: LiveKit Server -->
-                <div id="step-livekit" class="flow-step">
-                    <div class="step-icon">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg>
-                    </div>
-                    <div class="step-details">
-                        <div class="step-name">WebRTC Hub</div>
-                        <div id="flow-livekit-sub" class="step-sub">Offline</div>
-                    </div>
-                </div>
-
-                <div id="conn-4" class="flow-connector"></div>
-
-                <!-- Step 5: Audio Out -->
-                <div id="step-audio" class="flow-step">
-                    <div class="step-icon">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
-                    </div>
-                    <div class="step-details">
-                        <div class="step-name">Audio Output</div>
-                        <div id="flow-audio-sub" class="step-sub">Inactive</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
         <!-- Waveform player card -->
         <div id="visualizer-card" class="visualizer-card">
             <div class="visualizer-header">
-                <span class="visualizer-title">Synthesized Audio Output</span>
+                <span class="visualizer-title">Audio Output</span>
                 <div class="audio-details">
                     <span id="detail-lang">Language: en_us</span>
-                    <span id="detail-duration">Duration: 0.0s</span>
+                    <span id="detail-duration">Room: --</span>
                 </div>
             </div>
 
@@ -777,54 +361,33 @@
             </div>
 
             <div class="control-row">
-                <button id="play-btn" class="btn-circle play">
-                    <!-- Play icon svg -->
+                <button id="play-btn" class="btn-circle">
                     <svg id="play-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                         <polygon points="5 3 19 12 5 21 5 3"></polygon>
                     </svg>
-                    <!-- Pause icon svg (hidden initially) -->
                     <svg id="pause-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display: none;">
                         <rect x="6" y="4" width="4" height="16"></rect>
                         <rect x="14" y="4" width="4" height="16"></rect>
                     </svg>
                 </button>
-                <button id="download-btn" class="btn-secondary">Download WAV</button>
             </div>
         </div>
     </div>
 
     <script>
-        // Global error handler to catch uncaught errors and display them in the UI
+        // Global error handlers
         window.addEventListener('error', (event) => {
             console.error("Uncaught error:", event.error);
             const msg = event.message || (event.error ? event.error.message : "An unknown error occurred.");
-            const errMessageEl = document.getElementById('error-message');
-            const errBoxEl = document.getElementById('error-box');
-            if (errMessageEl && errBoxEl) {
-                errMessageEl.textContent = msg;
-                errBoxEl.style.display = 'flex';
-            }
-            const btn = document.getElementById('synthesize-btn');
-            if (btn) {
-                btn.classList.remove('loading');
-                btn.disabled = false;
-            }
+            showError(msg);
+            resetSynthesizeBtn();
         });
 
         window.addEventListener('unhandledrejection', (event) => {
             console.error("Unhandled promise rejection:", event.reason);
             const msg = (event.reason && event.reason.message) ? event.reason.message : "Unhandled promise rejection.";
-            const errMessageEl = document.getElementById('error-message');
-            const errBoxEl = document.getElementById('error-box');
-            if (errMessageEl && errBoxEl) {
-                errMessageEl.textContent = msg;
-                errBoxEl.style.display = 'flex';
-            }
-            const btn = document.getElementById('synthesize-btn');
-            if (btn) {
-                btn.classList.remove('loading');
-                btn.disabled = false;
-            }
+            showError(msg);
+            resetSynthesizeBtn();
         });
 
         const textInput = document.getElementById('text-input');
@@ -841,28 +404,8 @@
         const playBtn = document.getElementById('play-btn');
         const playIcon = document.getElementById('play-icon');
         const pauseIcon = document.getElementById('pause-icon');
-        const downloadBtn = document.getElementById('download-btn');
         const canvas = document.getElementById('visualizer-canvas');
         const canvasCtx = canvas.getContext('2d');
-
-        // Pipeline visualization helpers
-        function updatePipeline(stepId, state, subtitle) {
-            const stepEl = document.getElementById(`step-${stepId}`);
-            if (!stepEl) return;
-            stepEl.classList.remove('active', 'processing', 'success', 'error', 'active-en', 'active-hi', 'active-ar');
-            if (state) stepEl.classList.add(state);
-            if (subtitle !== undefined) {
-                const subEl = document.getElementById(`flow-${stepId}-sub`);
-                if (subEl) subEl.textContent = subtitle;
-            }
-        }
-
-        function updateConnector(connNum, state) {
-            const connEl = document.getElementById(`conn-${connNum}`);
-            if (!connEl) return;
-            connEl.className = 'flow-connector';
-            if (state) connEl.classList.add(state);
-        }
 
         // Language script detector
         function detectLanguageCode(text) {
@@ -893,47 +436,21 @@
             const lang = detectLanguageCode(val);
             
             langBadge.className = 'badge';
-            
-            // Clear parallel branches
-            updatePipeline('en-branch', '', 'Inactive');
-            updatePipeline('hi-branch', '', 'Inactive');
-            updatePipeline('ar-branch', '', 'Inactive');
-            
-            // Update pipeline input details
-            if (val.trim()) {
-                updatePipeline('input', 'active', `${val.length} chars`);
-                updateConnector(1, 'active');
-            } else {
-                updatePipeline('input', '', 'Empty');
-                updateConnector(1, '');
-            }
-
             if (lang === 'detecting') {
                 langText.textContent = 'Detecting Language';
-                updatePipeline('lang', '', 'Detecting');
-                updateConnector(2, '');
             } else if (lang === 'en') {
                 langBadge.classList.add('en');
-                langText.textContent = 'English (US) Script';
-                updatePipeline('lang', 'active', 'en_us');
-                updateConnector(2, 'active');
-                updatePipeline('en-branch', 'active-en', 'Selected');
+                langText.textContent = 'English (US)';
             } else if (lang === 'hi') {
                 langBadge.classList.add('hi');
-                langText.textContent = 'Hindi (IN) Script';
-                updatePipeline('lang', 'active', 'hi_in');
-                updateConnector(2, 'active');
-                updatePipeline('hi-branch', 'active-hi', 'Selected');
+                langText.textContent = 'Hindi (IN)';
             } else if (lang === 'ar') {
                 langBadge.classList.add('ar');
-                langText.textContent = 'Arabic (EG) Script';
-                updatePipeline('lang', 'active', 'ar_eg');
-                updateConnector(2, 'active');
-                updatePipeline('ar-branch', 'active-ar', 'Selected');
+                langText.textContent = 'Arabic (EG)';
             }
         });
 
-        // Clear textarea
+        // Clear button handler
         clearBtn.addEventListener('click', () => {
             textInput.value = '';
             textInput.dispatchEvent(new Event('input'));
@@ -942,18 +459,12 @@
 
         // Web Audio API state
         let audioContext = null;
-        let audioBuffer = null;
-        let audioSource = null;
         let analyser = null;
         let gainNode = null;
         let isPlaying = false;
-        let audioUrl = null;
-        let startTime = 0;
-        let startOffset = 0;
         let animationId = null;
         let currentRoom = null;
 
-        // Resize visualizer canvas
         function resizeCanvas() {
             canvas.width = canvas.clientWidth * window.devicePixelRatio;
             canvas.height = canvas.clientHeight * window.devicePixelRatio;
@@ -962,12 +473,11 @@
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
 
-        // Draw flat baseline on visualizer
         function drawFlatLine() {
             const width = canvas.width / window.devicePixelRatio;
             const height = canvas.height / window.devicePixelRatio;
             canvasCtx.clearRect(0, 0, width, height);
-            canvasCtx.lineWidth = 3;
+            canvasCtx.lineWidth = 2.5;
             canvasCtx.strokeStyle = '#4e4e6a';
             canvasCtx.beginPath();
             canvasCtx.moveTo(0, height / 2);
@@ -976,7 +486,6 @@
         }
         drawFlatLine();
 
-        // Draw audio visualization frame
         function drawVisualizer() {
             if (!analyser || !isPlaying) {
                 drawFlatLine();
@@ -996,10 +505,8 @@
 
                 canvasCtx.fillStyle = 'rgba(11, 11, 20, 0.35)';
                 canvasCtx.fillRect(0, 0, width, height);
-
-                canvasCtx.lineWidth = 3;
+                canvasCtx.lineWidth = 2.5;
                 
-                // Set color scheme based on active language
                 const lang = detectLanguageCode(textInput.value);
                 let strokeColor = '#8a2be2';
                 if (lang === 'en') strokeColor = '#4facfe';
@@ -1021,7 +528,6 @@
                     } else {
                         canvasCtx.lineTo(x, y);
                     }
-
                     x += sliceWidth;
                 }
 
@@ -1044,30 +550,7 @@
             synthesizeBtn.classList.add('loading');
             synthesizeBtn.disabled = true;
 
-            // Stop current playback if active
             stopAudio();
-
-            // Set pipeline status
-            const statusEl = document.getElementById('pipeline-status');
-            if (statusEl) statusEl.textContent = 'Processing request...';
-            
-            // Highlight active nodes
-            const lang = detectLanguageCode(text);
-            const langCode = lang === 'en' ? 'en_us' : lang === 'hi' ? 'hi_in' : 'ar_eg';
-            const activeBranch = lang === 'en' ? 'en-branch' : lang === 'hi' ? 'hi-branch' : 'ar-branch';
-            
-            updatePipeline('input', 'success', `${text.length} chars`);
-            updateConnector(1, 'success');
-            updatePipeline('lang', 'success', langCode);
-            updateConnector(2, 'success');
-            
-            // Clear other branches
-            updatePipeline('en-branch', '', 'Inactive');
-            updatePipeline('hi-branch', '', 'Inactive');
-            updatePipeline('ar-branch', '', 'Inactive');
-            
-            updatePipeline(activeBranch, 'processing', 'Checking status...');
-            updateConnector(3, 'processing');
 
             let data;
             try {
@@ -1083,18 +566,12 @@
                         const errDetail = await response.json();
                         errMsg = errDetail.detail || errMsg;
                     } catch (e) {}
-                    throw { step: activeBranch, message: errMsg };
+                    throw new Error(errMsg);
                 }
 
-                data = await response.json(); // { room: "...", token: "...", url: "..." }
-                
-                updatePipeline(activeBranch, 'active-' + lang, data.provider);
-                updateConnector(3, 'success');
-                
-                updatePipeline('livekit', 'processing', 'Connecting...');
-                updateConnector(4, 'processing');
+                data = await response.json();
 
-                // Pre-flight reachability check for LiveKit port to avoid hanging/infinite loading
+                // LiveKit port check
                 const testHttpUrl = data.url.replace(/^ws/, 'http');
                 try {
                     const controller = new AbortController();
@@ -1102,13 +579,9 @@
                     await fetch(testHttpUrl, { mode: 'no-cors', signal: controller.signal });
                     clearTimeout(timeoutId);
                 } catch (connErr) {
-                    throw { step: 'livekit', message: "LiveKit Server is offline. Please run 'livekit-server --dev' in another terminal." };
+                    throw new Error("LiveKit Server is offline. Please start 'livekit-server --dev'.");
                 }
 
-                // Hide download button since we are WebRTC streaming
-                downloadBtn.style.display = 'none';
-
-                // Initialize and resume Web Audio Context in the user gesture stack
                 if (!audioContext) {
                     audioContext = new (window.AudioContext || window.webkitAudioContext)();
                 }
@@ -1116,7 +589,6 @@
                     await audioContext.resume();
                 }
 
-                console.log("Connecting to LiveKit room:", data.room);
                 const room = new LivekitClient.Room();
                 currentRoom = room;
 
@@ -1129,29 +601,23 @@
                 function handleAudioTrack(track) {
                     if (track.kind !== "audio" || isTrackHandled) return;
                     isTrackHandled = true;
-                    console.log("Subscribed/attached to remote audio track:", track.sid);
                     
-                    // Clean up existing audio elements if any
                     const oldAudio = document.getElementById("livekit-audio");
                     if (oldAudio) oldAudio.remove();
 
-                    // Attach track to document for speech playback
                     const audioElement = track.attach();
                     audioElement.id = "livekit-audio";
                     audioElement.muted = false;
                     document.body.appendChild(audioElement);
                     audioElement.play().catch(e => console.log("Audio play error:", e));
                     
-                    // Resume audio context if suspended
                     if (audioContext && audioContext.state === 'suspended') {
                         audioContext.resume();
                     }
                     
-                    // Wire MediaStream into Web Audio API AnalyserNode for waveform visualizer
                     analyser = audioContext.createAnalyser();
                     analyser.fftSize = 256;
                     
-                    // Chrome requires WebAudio graph to connect to destination for active stream processing
                     gainNode = audioContext.createGain();
                     gainNode.gain.value = 0.001;
                     
@@ -1161,7 +627,6 @@
                     analyser.connect(gainNode);
                     gainNode.connect(audioContext.destination);
 
-                    // Display visualizer controls
                     const lang = detectLanguageCode(text);
                     detailLang.textContent = `Language: ${lang === 'en' ? 'en_us' : lang === 'hi' ? 'hi_in' : 'ar_eg'}`;
                     detailDuration.textContent = `Room: ${data.room}`;
@@ -1173,48 +638,30 @@
 
                     drawVisualizer();
 
-                    // Update pipeline step
-                    updatePipeline('audio', 'success', 'Streaming');
-                    if (statusEl) statusEl.textContent = 'Audio Stream Active';
-
-                    // Resolve the subscription promise
                     if (trackSubscribedResolve) trackSubscribedResolve();
                 }
 
-                room.on(LivekitClient.RoomEvent.TrackSubscribed, (track, publication, participant) => {
-                    if (track.kind === "audio") {
-                        handleAudioTrack(track);
-                    }
+                room.on(LivekitClient.RoomEvent.TrackSubscribed, (track) => {
+                    if (track.kind === "audio") handleAudioTrack(track);
                 });
 
-                room.on(LivekitClient.RoomEvent.TrackUnsubscribed, (track, publication, participant) => {
+                room.on(LivekitClient.RoomEvent.TrackUnsubscribed, (track) => {
                     if (track.kind === "audio") {
-                        console.log("Audio track unsubscribed");
                         track.detach();
                         stopAudio('completed');
                     }
                 });
 
                 room.on(LivekitClient.RoomEvent.Disconnected, () => {
-                    console.log("Disconnected from LiveKit room");
                     stopAudio('completed');
                 });
 
                 const connectPromise = room.connect(data.url, data.token);
                 const timeoutPromise = new Promise((_, reject) =>
-                    setTimeout(() => reject(new Error("Connection to LiveKit room timed out. Please check if LiveKit server is running.")), 15000)
+                    setTimeout(() => reject(new Error("Connection to LiveKit room timed out.")), 15000)
                 );
-                try {
-                    await Promise.race([connectPromise, timeoutPromise]);
-                } catch (lkErr) {
-                    throw { step: 'livekit', message: lkErr.message };
-                }
-                
-                console.log("Connected to room successfully. Checking for active audio tracks...");
-                updatePipeline('livekit', 'success', 'Connected');
-                updateConnector(4, 'success');
+                await Promise.race([connectPromise, timeoutPromise]);
 
-                // Immediately check if the bot participant has already published/subscribed an audio track
                 for (const participant of room.remoteParticipants.values()) {
                     for (const publication of participant.trackPublications.values()) {
                         if (publication.track && publication.track.kind === "audio") {
@@ -1222,48 +669,31 @@
                         }
                     }
                 }
-                
-                updatePipeline('audio', 'processing', 'Buffering...');
-                if (statusEl) statusEl.textContent = 'Waiting for audio stream...';
 
-                // Race track subscription with a timeout
                 const subscriptionTimeoutPromise = new Promise((_, reject) =>
-                    setTimeout(() => reject(new Error("Timeout waiting for audio stream. Please check if the TTS engine/model server is online.")), 20000)
+                    setTimeout(() => reject(new Error("Timeout waiting for audio stream from server.")), 20000)
                 );
-                try {
-                    await Promise.race([trackSubscribedPromise, subscriptionTimeoutPromise]);
-                } catch (subErr) {
-                    throw { step: 'audio', message: subErr.message };
-                }
-                
-                console.log("Audio stream received successfully.");
+                await Promise.race([trackSubscribedPromise, subscriptionTimeoutPromise]);
 
-                synthesizeBtn.classList.remove('loading');
-                synthesizeBtn.disabled = false;
+                resetSynthesizeBtn();
 
             } catch (err) {
                 console.error(err);
-                
-                const activeBranch = lang === 'en' ? 'en-branch' : lang === 'hi' ? 'hi-branch' : 'ar-branch';
-                const step = err.step || activeBranch;
-                const msg = err.message || "Failed to establish WebRTC connection.";
-                
-                updatePipeline(step, 'error', 'Failed');
-                if (statusEl) statusEl.textContent = 'Error: ' + msg;
-                
-                showError(msg);
-                synthesizeBtn.classList.remove('loading');
-                synthesizeBtn.disabled = false;
+                showError(err.message || "Failed to establish WebRTC connection.");
+                resetSynthesizeBtn();
             }
         });
 
-        // Error helper
         function showError(msg) {
             errorMessage.textContent = msg;
             errorBox.style.display = 'flex';
         }
 
-        // Playback control
+        function resetSynthesizeBtn() {
+            synthesizeBtn.classList.remove('loading');
+            synthesizeBtn.disabled = false;
+        }
+
         playBtn.addEventListener('click', () => {
             if (isPlaying) {
                 pauseAudio();
@@ -1274,12 +704,8 @@
 
         function playAudio() {
             const audioEl = document.getElementById("livekit-audio");
-            if (audioEl) {
-                audioEl.muted = false;
-            }
-            if (gainNode) {
-                gainNode.gain.value = 0.001;
-            }
+            if (audioEl) audioEl.muted = false;
+            if (gainNode) gainNode.gain.value = 0.001;
             isPlaying = true;
             playIcon.style.display = 'none';
             pauseIcon.style.display = 'block';
@@ -1288,12 +714,8 @@
 
         function pauseAudio() {
             const audioEl = document.getElementById("livekit-audio");
-            if (audioEl) {
-                audioEl.muted = true;
-            }
-            if (gainNode) {
-                gainNode.gain.value = 0.0;
-            }
+            if (audioEl) audioEl.muted = true;
+            if (gainNode) gainNode.gain.value = 0.0;
             isPlaying = false;
             playIcon.style.display = 'block';
             pauseIcon.style.display = 'none';
@@ -1302,68 +724,24 @@
 
         function stopAudio(reason = 'user_stop') {
             if (currentRoom) {
-                try {
-                    currentRoom.disconnect();
-                } catch(e) {}
+                try { currentRoom.disconnect(); } catch(e) {}
                 currentRoom = null;
             }
             const el = document.getElementById("livekit-audio");
-            if (el) {
-                el.remove();
-            }
+            if (el) el.remove();
+            
             isPlaying = false;
             playIcon.style.display = 'block';
             pauseIcon.style.display = 'none';
             drawFlatLine();
-            if (animationId) {
-                cancelAnimationFrame(animationId);
-            }
-            // Hide visualizer card only if manual stop/clear
+
+            if (animationId) cancelAnimationFrame(animationId);
+
             if (reason !== 'completed' && visualizerCard) {
                 visualizerCard.classList.remove('active');
             }
-            // Reset Web Audio nodes
             gainNode = null;
             analyser = null;
-
-            // Reset pipeline state based on reason
-            const statusEl = document.getElementById('pipeline-status');
-            const val = textInput.value;
-            const lang = detectLanguageCode(val);
-
-            if (reason === 'completed') {
-                if (statusEl) statusEl.textContent = 'Pipeline Finished';
-                updatePipeline('livekit', 'success', 'Finished');
-                updatePipeline('audio', 'success', 'Completed');
-                updateConnector(3, 'success');
-                updateConnector(4, 'success');
-            } else {
-                if (statusEl) statusEl.textContent = 'System Idle';
-                
-                updatePipeline('en-branch', '', 'Inactive');
-                updatePipeline('hi-branch', '', 'Inactive');
-                updatePipeline('ar-branch', '', 'Inactive');
-                
-                if (val.trim() && lang !== 'detecting') {
-                    updatePipeline('input', 'active', `${val.length} chars`);
-                    updatePipeline('lang', 'active', lang === 'en' ? 'en_us' : lang === 'hi' ? 'hi_in' : 'ar_eg');
-                    updateConnector(1, 'active');
-                    updateConnector(2, 'active');
-                    
-                    const activeBranch = lang === 'en' ? 'en-branch' : lang === 'hi' ? 'hi-branch' : 'ar-branch';
-                    updatePipeline(activeBranch, 'active-' + lang, 'Selected');
-                } else {
-                    updatePipeline('input', '', 'Empty');
-                    updatePipeline('lang', '', 'Detecting');
-                    updateConnector(1, '');
-                    updateConnector(2, '');
-                }
-                
-                updatePipeline('livekit', '', 'Offline');
-                updatePipeline('audio', '', 'Inactive');
-                updateConnector(3, '');
-                updateConnector(4, '');
-            }
         }
     </script>
 </body>
