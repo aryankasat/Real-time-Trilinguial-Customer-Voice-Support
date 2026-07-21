@@ -12,7 +12,7 @@ The system follows **SOLID design principles** (decoupled processors, service fa
 
 ## 🎥 Video Snippet & Web Interface Demo
 
-<video src="assets/demo.mp4" controls width="100%" title="Real-Time Trilingual Voice Support Demo"></video>
+![Real-Time Trilingual Voice Support Demo](assets/demo.mp4)
 
 *Video 1: Real-time WebRTC audio playback with dynamic WebAudio canvas waveform visualizer and live pipeline step tracking.*
 
